@@ -1,0 +1,19 @@
+# Timmy-IA - Dependências
+
+# LLM e IA
+openai>=1.12.0
+python-dotenv>=1.0.0
+
+# Interface Web
+streamlit>=1.31.0
+
+# Manipulação de dados
+pathlib2>=2.3.7
+
+# Utilitários
+uuid
+json5>=0.9.14
+
+# Desenvolvimento e testes (opcional)
+pytest>=7.4.0
+pytest-cov>=4.1.0

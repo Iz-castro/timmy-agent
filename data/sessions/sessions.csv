@@ -1,0 +1,2 @@
+session_id,user_id,tenant_id,channel,phone_number,start_time,end_time,message_count,status,intent,satisfaction,converted,metadata
+streamlit_248e2c44,8bcc3cac-daf7-4a07-8397-2bb96c0dff43,default,streamlit,,2025-09-05T15:01:19.047361,,19,active,,,False,
