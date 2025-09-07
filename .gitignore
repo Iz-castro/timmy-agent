@@ -22,7 +22,52 @@ logs/
 # Dados sensíveis
 .env
 config/secrets.json
+
+# ===============================================
+# 🔒 PROTEÇÃO DE DADOS DOS TENANTS
+# ===============================================
+
+# Dados de produção - NUNCA commitados
+data/*/conversations/
+data/*/sessions/
+data/*/users/
+
+# Manter apenas estrutura de exemplo do tenant default
+!data/default/
+!data/default/.gitkeep
+
+# Arquivos de dados específicos (CSV, JSON com dados reais)
+*.csv
+!**/example.csv
+!**/template.csv
+
+# Backups de dados
+data/backups/
+*.backup
+*.bak
+
+# Dados de tenants específicos
 tenants/*/secrets/
+tenants/*/data/
+tenants/*/logs/
+
+# ===============================================
+# 📁 ESTRUTURA MANTIDA NO GIT
+# ===============================================
+
+# Manter arquivos de configuração dos tenants (sem dados)
+!tenants/*/config.json
+!tenants/*/knowledge.json
+!tenants/*/examples.jsonl
+
+# Manter estrutura de diretórios
+!data/
+!data/*/
+!data/*/.gitkeep
+
+# ===============================================
+# 🛠️ DESENVOLVIMENTO
+# ===============================================
 
 # Dependências
 node_modules/
@@ -30,3 +75,30 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Arquivos temporários
+temp/
+tmp/
+*.temp
+*.tmp
+
+# Arquivos de teste com dados sensíveis
+test_data/
+*_test.csv
+*_sample.csv
+
+# ===============================================
+# 📊 ANALYTICS E RELATÓRIOS
+# ===============================================
+
+# Relatórios gerados automaticamente
+reports/
+analytics/
+*.report
+*.analytics
+
+# Exports de dados
+exports/
+*.export
+*.xlsx
+*.xls
