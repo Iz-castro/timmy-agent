@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Core Agent - Cérebro principal do Timmy-IA
-Responsável por: conversação, coleta de dados, resposta contextual
+Core Agent - Com sistema de releitura completa da conversa
 """
 
 import json
 import uuid
+import traceback
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
@@ -16,7 +16,6 @@ from core.utils import (
     mark_once, chat_complete, extract_info_from_text
 )
 
-# Importa sistema de persistência
 from core.persistence import (
     UserInfo, SessionInfo, ConversationMessage,
     persistence_manager, get_or_create_user_by_phone
@@ -36,153 +35,272 @@ class Message:
             self.meta = {}
 
 
-class TimmyAgent:
-    """
-    Agente conversacional principal
+class ConversationReviewer:
+    """Sistema de releitura completa da conversa"""
     
-    Funcionalidades:
-    - Conversa natural
-    - Coleta passiva de informações (nome, email, telefone, etc.)
-    - Responde com base no conhecimento carregado
-    - Mantém contexto por sessão
-    - Persiste dados em CSV
-    """
+    def __init__(self, session_key: str):
+        self.session_key = session_key
+    
+    def get_full_conversation_history(self) -> List[Dict[str, str]]:
+        """Recupera todo o histórico da conversa da sessão atual"""
+        try:
+            # Busca todas as mensagens da sessão
+            messages = persistence_manager.get_session_messages(self.session_key)
+            
+            conversation_history = []
+            for msg in messages:
+                conversation_history.append({
+                    "role": msg.role,
+                    "content": msg.content,
+                    "timestamp": msg.timestamp
+                })
+            
+            print(f"[CONVERSATION] Recuperadas {len(conversation_history)} mensagens da sessão")
+            return conversation_history
+            
+        except Exception as e:
+            print(f"[ERROR] Erro ao recuperar histórico: {e}")
+            return []
+    
+    def format_conversation_for_review(self, history: List[Dict[str, str]]) -> str:
+        """Formata conversa para análise pelo LLM"""
+        if not history:
+            return "Esta é a primeira mensagem da conversa."
+        
+        formatted_lines = ["HISTÓRICO COMPLETO DA CONVERSA:"]
+        
+        for i, msg in enumerate(history, 1):
+            role_display = "Usuário" if msg["role"] == "user" else "Assistente"
+            formatted_lines.append(f"{i}. {role_display}: {msg['content']}")
+        
+        return "\n".join(formatted_lines)
+    
+    def generate_conversation_context(self) -> str:
+        """Gera contexto rico baseado na conversa completa"""
+        history = self.get_full_conversation_history()
+        
+        if not history:
+            return ""
+        
+        # Formata para análise
+        formatted_conversation = self.format_conversation_for_review(history)
+        
+        # Adiciona análise contextual
+        context_analysis = f"""
+{formatted_conversation}
+
+ANÁLISE PARA PRÓXIMA RESPOSTA:
+- Total de mensagens na conversa: {len(history)}
+- Primeira interação: {"Sim" if len(history) <= 2 else "Não"}
+- Já me apresentei: {"Sim" if any("sou" in msg.get("content", "").lower() and msg.get("role") == "assistant" for msg in history) else "Não"}
+- Nome do usuário conhecido: {self._extract_user_name_from_history(history)}
+- Informações já compartilhadas: {self._extract_shared_info_from_history(history)}
+"""
+        
+        return context_analysis
+    
+    def _extract_user_name_from_history(self, history: List[Dict[str, str]]) -> str:
+        """Extrai nome do usuário do histórico"""
+        for msg in history:
+            if msg["role"] == "user":
+                content = msg["content"].lower()
+                # Padrões para identificar nome
+                patterns = ["me chamo", "meu nome é", "sou o", "sou a", "eu sou"]
+                for pattern in patterns:
+                    if pattern in content:
+                        # Extração simples do nome
+                        import re
+                        match = re.search(f"{pattern}\\s+([A-Za-zÀ-ÿ]+)", content, re.IGNORECASE)
+                        if match:
+                            return match.group(1)
+        return "não informado"
+    
+    def _extract_shared_info_from_history(self, history: List[Dict[str, str]]) -> str:
+        """Extrai informações já compartilhadas"""
+        shared_info = []
+        
+        for msg in history:
+            if msg["role"] == "user":
+                content = msg["content"].lower()
+                
+                # Profissão/trabalho
+                if any(word in content for word in ["trabalho", "sou", "desenvolvo", "programo", "faço"]):
+                    shared_info.append("Profissão/atividade mencionada")
+                
+                # Projetos
+                if any(word in content for word in ["projeto", "criando", "construindo", "desenvolvendo"]):
+                    shared_info.append("Projeto atual mencionado")
+                
+                # Interesses
+                if any(word in content for word in ["gosto", "interesse", "especialista"]):
+                    shared_info.append("Interesses mencionados")
+        
+        return ", ".join(shared_info) if shared_info else "Nenhuma informação específica"
+
+
+class TimmyAgent:
+    """Agente conversacional com releitura completa"""
     
     def __init__(self, tenant_id: str = "default"):
         self.tenant_id = tenant_id
         self.knowledge = load_knowledge_data(tenant_id)
         
-    def _greeting_line(self) -> str:
-        """Gera saudação contextual baseada no horário"""
-        hour = datetime.now().hour
-        if 5 <= hour < 12:
-            greeting = "Bom dia"
-        elif hour < 18:
-            greeting = "Boa tarde"
-        else:
-            greeting = "Boa noite"
+    def _build_system_prompt_with_full_context(self, conversation_context: str) -> str:
+        """Constrói prompt do sistema com contexto completo da conversa"""
         
-        agent_name = self.knowledge.get("agent_name", "Timmy")
-        business_name = self.knowledge.get("business_name", "nossa empresa")
-        
-        return f"{greeting}! Eu sou {agent_name}, assistente de {business_name}."
-    
-    def _build_system_prompt(self) -> str:
-        """Constrói prompt do sistema com conhecimento disponível"""
-        
-        # Prompt base
-        base_prompt = """Você é um assistente virtual inteligente e prestativo.
-
-INSTRUÇÕES BÁSICAS:
-- Seja cordial, profissional e empático
-- Responda de forma clara e objetiva  
-- Ajude o usuário com suas dúvidas
-- Colete informações quando necessário (nome, contato, etc.)
-- Use apenas informações do conhecimento fornecido
-- Não invente dados que não estão disponíveis
-
-CONHECIMENTO DISPONÍVEL:
-{knowledge}
-
-REGRAS:
-- Respostas entre 80-120 caracteres quando possível
-- Se não souber algo, seja honesto
-- Mantenha o contexto da conversa
-- Pergunte quando precisar de esclarecimentos
-"""
-        
-        # Adiciona conhecimento estruturado
         knowledge_text = ""
         if self.knowledge:
             knowledge_text = json.dumps(self.knowledge, indent=2, ensure_ascii=False)
         
-        return base_prompt.format(knowledge=knowledge_text)
+        # Prompt com contexto completo
+        base_prompt = f"""Você é um assistente virtual inteligente com acesso ao histórico completo da conversa.
+
+PERSONALIDADE:
+- Seja natural, cordial e consistente
+- NUNCA se reapresente se já fez isso antes na conversa
+- NUNCA repita saudações desnecessariamente
+- Use informações já compartilhadas pelo usuário
+- Demonstre que acompanha o fluxo da conversa
+- Seja conversacional e menos robótico
+
+INSTRUÇÕES CRÍTICAS:
+- SEMPRE consulte o histórico completo antes de responder
+- Se já se apresentou, não faça novamente
+- Se já sabe o nome do usuário, use-o naturalmente
+- Se já sabe informações sobre o usuário, referencie-as
+- Mantenha consistência com mensagens anteriores
+- Responda de forma clara e objetiva
+- Não invente informações não mencionadas
+
+CONTEXTO COMPLETO DA CONVERSA:
+{conversation_context}
+
+CONHECIMENTO DISPONÍVEL:
+{knowledge_text}
+
+REGRAS DE RESPOSTA:
+- Respostas entre 80-120 caracteres quando possível
+- Se não souber algo específico, seja honesto
+- Mantenha naturalidade e fluidez
+- JAMAIS ignore o contexto da conversa
+- Demonstre que você acompanha e lembra da conversa
+"""
+        
+        return base_prompt
     
-    def _analyze_intent(self, text: str, session_state: Dict) -> str:
-        """Analisa intenção básica da mensagem"""
+    def _analyze_intent(self, text: str, conversation_history: List[Dict]) -> str:
+        """Analisa intenção considerando o histórico completo"""
         text_lower = text.lower()
         
-        # Intents básicos
-        if any(word in text_lower for word in ["olá", "oi", "bom dia", "boa tarde", "boa noite"]):
-            return "greeting"
+        # Verifica se é realmente a primeira mensagem
+        user_messages = [msg for msg in conversation_history if msg["role"] == "user"]
+        is_truly_first = len(user_messages) == 0
         
-        if any(word in text_lower for word in ["obrigado", "obrigada", "valeu", "tchau", "até logo"]):
+        if is_truly_first and any(word in text_lower for word in ["olá", "oi", "bom dia", "boa tarde", "boa noite"]):
+            return "first_greeting"
+        elif any(word in text_lower for word in ["obrigado", "obrigada", "valeu", "tchau", "até logo"]):
             return "farewell"
-        
-        if any(word in text_lower for word in ["ajuda", "help", "como", "o que", "quem"]):
+        elif any(word in text_lower for word in ["ajuda", "help", "como", "o que", "quem"]):
             return "help_request"
-        
-        if any(word in text_lower for word in ["preço", "valor", "quanto custa", "investimento"]):
+        elif any(word in text_lower for word in ["preço", "valor", "quanto custa", "investimento"]):
             return "pricing"
-        
-        if any(word in text_lower for word in ["contato", "telefone", "email", "endereço"]):
+        elif any(word in text_lower for word in ["contato", "telefone", "email", "endereço"]):
             return "contact_info"
-        
-        return "general"
-    
-    def _handle_first_interaction(self, message: Message, session_state: Dict) -> List[str]:
-        """Lida com primeira interação da sessão"""
-        if not mark_once(message.session_key, "greeting_sent"):
-            return []
-        
-        greeting = self._greeting_line()
-        intent = self._analyze_intent(message.text, session_state)
-        
-        if intent == "greeting":
-            response = f"{greeting} Como posso ajudar você hoje?"
-        elif intent == "help_request":
-            response = f"{greeting} Claro! Estou aqui para te ajudar. O que você gostaria de saber?"
         else:
-            response = f"{greeting} Vi que você quer saber sobre algo específico. Vou te ajudar!"
+            return "general"
+    
+    def _should_send_greeting(self, conversation_history: List[Dict]) -> bool:
+        """Determina se deve enviar saudação baseado no histórico completo"""
         
-        return micro_responses(response, session_key=message.session_key)
+        # Se não há histórico, é primeira interação
+        if not conversation_history:
+            return True
+        
+        # Verifica se já se apresentou
+        for msg in conversation_history:
+            if msg["role"] == "assistant":
+                content = msg["content"].lower()
+                if any(phrase in content for phrase in ["sou", "eu sou", "assistente"]):
+                    return False  # Já se apresentou
+        
+        return True  # Ainda não se apresentou
+    
+    def _handle_first_interaction(self, message: Message, conversation_history: List[Dict]) -> List[str]:
+        """Lida com primeira interação baseado no histórico completo"""
+        
+        # Verifica se realmente deve fazer saudação
+        if not self._should_send_greeting(conversation_history):
+            return []  # Não faz saudação
+        
+        try:
+            hour = datetime.now().hour
+            if 5 <= hour < 12:
+                greeting = "Bom dia"
+            elif hour < 18:
+                greeting = "Boa tarde"
+            else:
+                greeting = "Boa noite"
+            
+            agent_name = self.knowledge.get("agent_name", "Timmy")
+            business_name = self.knowledge.get("business_name", "nossa empresa")
+            
+            intent = self._analyze_intent(message.text, conversation_history)
+            
+            if intent == "first_greeting":
+                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Como posso ajudar você hoje?"
+            elif intent == "help_request":
+                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Claro! Estou aqui para te ajudar. O que você gostaria de saber?"
+            else:
+                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Vi que você quer saber sobre algo específico. Vou te ajudar!"
+            
+            return micro_responses(response, session_key=message.session_key)
+            
+        except Exception as e:
+            print(f"[ERROR] Erro em _handle_first_interaction: {e}")
+            return ["Olá! Como posso ajudar você hoje?"]
     
     def _collect_user_info(self, text: str, session_key: str) -> Dict[str, str]:
-        """Coleta passivamente informações do usuário e persiste"""
-        extracted = extract_info_from_text(text)
-        collected = {}
-        
-        current_state = get_state(session_key)
-        
-        # Atualiza apenas se não existir
-        for key, value in extracted.items():
-            if value and not current_state.get(key):
-                collected[key] = value
-                set_state(session_key, **{key: value})
-        
-        # Se coletou informações significativas, persiste no CSV
-        if collected:
-            self._persist_user_data(session_key, current_state, collected)
-        
-        return collected
+        """Coleta informações do usuário"""
+        try:
+            extracted = extract_info_from_text(text)
+            collected = {}
+            
+            current_state = get_state(session_key)
+            
+            for key, value in extracted.items():
+                if value and not current_state.get(key):
+                    collected[key] = value
+                    set_state(session_key, **{key: value})
+            
+            if collected:
+                self._persist_user_data(session_key, current_state, collected)
+            
+            return collected
+            
+        except Exception as e:
+            print(f"[ERROR] Erro em _collect_user_info: {e}")
+            return {}
     
     def _persist_user_data(self, session_key: str, current_state: Dict, new_info: Dict):
-        """Persiste dados do usuário no sistema CSV"""
+        """Persiste dados do usuário"""
         try:
-            # Coleta todos os dados conhecidos sobre o usuário
             all_user_data = {**current_state, **new_info}
             
-            # Busca ou cria usuário
             user_id = all_user_data.get("user_id")
             if not user_id:
-                # Se tem telefone, tenta buscar usuário existente
                 phone = all_user_data.get("phone")
                 if phone:
                     existing_user = persistence_manager.get_user_by_phone(phone)
                     if existing_user:
                         user_id = existing_user.user_id
-                        # Atualiza session state com user_id
                         set_state(session_key, user_id=user_id)
                     else:
-                        # Cria novo usuário
                         user_id = str(uuid.uuid4())
                         set_state(session_key, user_id=user_id)
                 else:
-                    # Cria novo usuário sem telefone
                     user_id = str(uuid.uuid4())
                     set_state(session_key, user_id=user_id)
             
-            # Cria/atualiza objeto UserInfo
             user_info = UserInfo(
                 user_id=user_id,
                 name=all_user_data.get("name"),
@@ -197,41 +315,34 @@ REGRAS:
                 notes=all_user_data.get("notes")
             )
             
-            # Salva usuário
             persistence_manager.save_user_info(user_info)
             
-            # Atualiza/cria sessão
             session_info = persistence_manager.get_session_by_id(session_key)
             if not session_info:
                 session_info = SessionInfo(
                     session_id=session_key,
                     user_id=user_id,
                     tenant_id=self.tenant_id,
-                    channel="streamlit"  # Padrão, pode ser alterado
+                    channel="streamlit"
                 )
                 if all_user_data.get("phone"):
                     session_info.phone_number = all_user_data["phone"]
             else:
-                # Atualiza informações da sessão
                 session_info.user_id = user_id
                 if all_user_data.get("phone"):
                     session_info.phone_number = all_user_data["phone"]
             
             persistence_manager.save_session_info(session_info)
             
-            print(f"[INFO] Dados persistidos - Usuário: {user_id}, Sessão: {session_key}")
-            
         except Exception as e:
-            print(f"[ERROR] Erro ao persistir dados do usuário: {e}")
+            print(f"[ERROR] Erro em _persist_user_data: {e}")
     
     def _save_message(self, session_key: str, role: str, content: str, intent: str = None):
-        """Salva mensagem no histórico CSV"""
+        """Salva mensagem no histórico"""
         try:
-            # Obtém user_id do estado da sessão
             current_state = get_state(session_key)
             user_id = current_state.get("user_id")
             
-            # Cria objeto de mensagem
             message = ConversationMessage(
                 message_id=str(uuid.uuid4()),
                 session_id=session_key,
@@ -242,188 +353,164 @@ REGRAS:
                 intent=intent
             )
             
-            # Salva mensagem
             persistence_manager.save_message(message)
-            
-            # Atualiza contador de mensagens da sessão
             persistence_manager.update_session_message_count(session_key)
             
+            # Atualiza contador local
+            message_count = current_state.get("message_count", 0) + 1
+            set_state(session_key, message_count=message_count)
+            
         except Exception as e:
-            print(f"[ERROR] Erro ao salvar mensagem: {e}")
+            print(f"[ERROR] Erro em _save_message: {e}")
     
-    def _generate_contextual_response(self, message: Message, session_state: Dict) -> str:
-        """Gera resposta usando LLM com contexto"""
+    def _generate_contextual_response(self, message: Message, conversation_context: str) -> str:
+        """Gera resposta com base no contexto completo da conversa"""
         
-        # Prepara contexto da sessão
-        context_info = []
-        if session_state.get("name"):
-            context_info.append(f"Nome do usuário: {session_state['name']}")
-        if session_state.get("email"):
-            context_info.append(f"Email: {session_state['email']}")
-        if session_state.get("phone"):
-            context_info.append(f"Telefone: {session_state['phone']}")
-        if session_state.get("company"):
-            context_info.append(f"Empresa: {session_state['company']}")
-        if session_state.get("job_title"):
-            context_info.append(f"Cargo: {session_state['job_title']}")
-        if session_state.get("location"):
-            context_info.append(f"Localização: {session_state['location']}")
-        if session_state.get("interests"):
-            context_info.append(f"Interesses: {session_state['interests']}")
-        
-        context_text = "\n".join(context_info) if context_info else "Primeira interação com o usuário."
-        
-        # Verifica se usuário já tem histórico (busca por telefone)
-        user_history = ""
-        if session_state.get("phone"):
-            try:
-                history = get_user_history(session_state["phone"])
-                if "user_info" in history and history["total_sessions"] > 1:
-                    user_history = f"\n\nEste usuário já conversou conosco {history['total_sessions']} vezes antes."
-            except:
-                pass
-        
-        # Mensagem para o LLM
-        user_prompt = f"""CONTEXTO DA SESSÃO:
-{context_text}{user_history}
+        try:
+            # Prompt para o usuário incluindo contexto completo
+            user_prompt = f"""Baseado no histórico completo da conversa acima, responda à seguinte mensagem do usuário:
 
-MENSAGEM DO USUÁRIO:
-{message.text}
+NOVA MENSAGEM: {message.text}
 
-Responda de forma útil, contextual e personalizada."""
-        
-        # Gera resposta
-        system_prompt = self._build_system_prompt()
-        response = chat_complete(
-            system_prompt=system_prompt,
-            messages=[{"role": "user", "content": user_prompt}],
-            max_tokens=200,
-            temperature=0.7
-        )
-        
-        return response.strip()
+Responda de forma natural, consistente com a conversa e demonstrando que você acompanha o contexto. Não se reapresente se já fez isso. Use informações já compartilhadas pelo usuário."""
+            
+            system_prompt = self._build_system_prompt_with_full_context(conversation_context)
+            
+            response = chat_complete(
+                system_prompt=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+                max_tokens=200,
+                temperature=0.7
+            )
+            
+            return response.strip()
+            
+        except Exception as e:
+            print(f"[ERROR] Erro em _generate_contextual_response: {e}")
+            return "Desculpe, tive um problema técnico. Pode tentar novamente?"
 
 
 def handle_turn(tenant_id: str, message: Message) -> List[str]:
-    """
-    Função principal para processar um turno de conversa
+    """Processa turno com releitura completa da conversa"""
     
-    Args:
-        tenant_id: ID do tenant/cliente
-        message: Mensagem recebida
+    print(f"\n[DEBUG] ===== INICIANDO handle_turn =====")
+    print(f"[DEBUG] tenant_id: {tenant_id}")
+    print(f"[DEBUG] message.text: '{message.text}'")
+    print(f"[DEBUG] message.session_key: {message.session_key}")
+    
+    try:
+        agent = TimmyAgent(tenant_id)
         
-    Returns:
-        Lista de respostas (micro-respostas)
-    """
-    
-    # Inicializa agente
-    agent = TimmyAgent(tenant_id)
-    
-    # Estado da sessão
-    session_state = get_state(message.session_key)
-    
-    # 🔴 NOVO: Salva mensagem do usuário
-    intent = agent._analyze_intent(message.text, session_state)
-    agent._save_message(message.session_key, "user", message.text, intent)
-    
-    # 1. Primeira interação (saudação)
-    first_interaction = agent._handle_first_interaction(message, session_state)
-    if first_interaction:
-        # Salva respostas da saudação
-        for response in first_interaction:
-            agent._save_message(message.session_key, "assistant", response, "greeting")
-        return first_interaction
-    
-    # 2. Coleta passiva de informações
-    collected_info = agent._collect_user_info(message.text, message.session_key)
-    
-    # 3. Log de informações coletadas (opcional)
-    if collected_info:
-        print(f"[INFO] Coletado da sessão {message.session_key}: {collected_info}")
-    
-    # 4. Gera resposta contextual
-    response_text = agent._generate_contextual_response(message, session_state)
-    
-    # 5. Quebra em micro-respostas
-    responses = micro_responses(response_text, session_key=message.session_key)
-    
-    # 🔴 NOVO: Salva respostas do assistente
-    for response in responses:
-        agent._save_message(message.session_key, "assistant", response, intent)
-    
-    return responses
+        # Inicializa revisor de conversa
+        conversation_reviewer = ConversationReviewer(message.session_key)
+        
+        # PASSO 1: Salva a mensagem do usuário PRIMEIRO
+        print(f"[DEBUG] PASSO 1: Salvando mensagem do usuário...")
+        intent = "general"  # Será determinado depois com contexto completo
+        agent._save_message(message.session_key, "user", message.text, intent)
+        
+        # PASSO 2: Recupera TODA a conversa (incluindo a mensagem que acabou de salvar)
+        print(f"[DEBUG] PASSO 2: Recuperando conversa completa...")
+        conversation_history = conversation_reviewer.get_full_conversation_history()
+        
+        # PASSO 3: Gera contexto completo para análise
+        print(f"[DEBUG] PASSO 3: Gerando contexto completo...")
+        conversation_context = conversation_reviewer.generate_conversation_context()
+        
+        print(f"[DEBUG] Contexto gerado para {len(conversation_history)} mensagens")
+        
+        # PASSO 4: Determina intent com contexto completo
+        print(f"[DEBUG] PASSO 4: Determinando intent...")
+        intent = agent._analyze_intent(message.text, conversation_history)
+        print(f"[DEBUG] Intent determinado: {intent}")
+        
+        # PASSO 5: Verifica se deve fazer primeira interação
+        print(f"[DEBUG] PASSO 5: Verificando primeira interação...")
+        first_interaction = agent._handle_first_interaction(message, conversation_history)
+        if first_interaction:
+            print(f"[DEBUG] Enviando primeira interação: {first_interaction}")
+            for response in first_interaction:
+                agent._save_message(message.session_key, "assistant", response, "greeting")
+            return first_interaction
+        
+        # PASSO 6: Coleta informações do usuário
+        print(f"[DEBUG] PASSO 6: Coletando informações...")
+        collected_info = agent._collect_user_info(message.text, message.session_key)
+        
+        if collected_info:
+            print(f"[INFO] Coletado: {collected_info}")
+        
+        # PASSO 7: Gera resposta com contexto completo
+        print(f"[DEBUG] PASSO 7: Gerando resposta contextual...")
+        response_text = agent._generate_contextual_response(message, conversation_context)
+        print(f"[DEBUG] Resposta gerada: '{response_text}'")
+        
+        # PASSO 8: Quebra em micro-respostas inteligentes
+        print(f"[DEBUG] PASSO 8: Quebrando em micro-respostas...")
+        responses = micro_responses(response_text, session_key=message.session_key)
+        print(f"[DEBUG] Micro-responses: {responses}")
+        
+        # PASSO 9: Salva respostas do assistente
+        print(f"[DEBUG] PASSO 9: Salvando respostas...")
+        for response in responses:
+            agent._save_message(message.session_key, "assistant", response, intent)
+        
+        print(f"[DEBUG] ===== handle_turn CONCLUÍDO =====\n")
+        return responses
+        
+    except Exception as e:
+        print(f"[ERROR DEBUG] Erro em handle_turn: {e}")
+        print(f"[ERROR DEBUG] Traceback completo:")
+        print(traceback.format_exc())
+        return [f"Erro interno: {str(e)}"]
 
 
-# Função de conveniência para uso direto
 def process_message(text: str, session_key: str = None, tenant_id: str = "default", phone_number: str = None) -> List[str]:
-    """
-    Função simplificada para processar uma mensagem
+    """Função simplificada para processar mensagem"""
     
-    Args:
-        text: Texto da mensagem
-        session_key: Chave da sessão (gerada automaticamente se não fornecida)
-        tenant_id: ID do tenant
-        phone_number: Telefone do usuário (para webhook WhatsApp)
+    try:
+        if not session_key:
+            session_key = f"session_{uuid.uuid4().hex[:8]}"
         
-    Returns:
-        Lista de respostas
-    """
-    if not session_key:
-        session_key = f"session_{uuid.uuid4().hex[:8]}"
-    
-    # 🔴 NOVO: Se tem telefone, usa ele como session_key e busca/cria usuário
-    if phone_number:
-        # Usa telefone como base para session_key
-        session_key = f"phone_{phone_number.replace('+', '').replace(' ', '')}"
+        if phone_number:
+            session_key = f"phone_{phone_number.replace('+', '').replace(' ', '')}"
+            user = get_or_create_user_by_phone(phone_number)
+            set_state(session_key, user_id=user.user_id, phone=phone_number)
+            
+            session_info = persistence_manager.get_session_by_id(session_key)
+            if not session_info:
+                session_info = SessionInfo(
+                    session_id=session_key,
+                    user_id=user.user_id,
+                    tenant_id=tenant_id,
+                    channel="whatsapp",
+                    phone_number=phone_number
+                )
+                persistence_manager.save_session_info(session_info)
         
-        # Busca ou cria usuário por telefone
-        user = get_or_create_user_by_phone(phone_number)
+        message = Message(
+            text=text,
+            session_key=session_key,
+            tenant_id=tenant_id
+        )
         
-        # Atualiza estado da sessão com dados do usuário
-        set_state(session_key, user_id=user.user_id, phone=phone_number)
+        return handle_turn(tenant_id, message)
         
-        # Atualiza/cria sessão com canal WhatsApp
-        session_info = persistence_manager.get_session_by_id(session_key)
-        if not session_info:
-            session_info = SessionInfo(
-                session_id=session_key,
-                user_id=user.user_id,
-                tenant_id=tenant_id,
-                channel="whatsapp",
-                phone_number=phone_number
-            )
-            persistence_manager.save_session_info(session_info)
-    
-    message = Message(
-        text=text,
-        session_key=session_key,
-        tenant_id=tenant_id
-    )
-    
-    return handle_turn(tenant_id, message)
+    except Exception as e:
+        print(f"[ERROR] Erro em process_message: {e}")
+        return [f"Erro em process_message: {str(e)}"]
 
 
 def get_user_history(phone_number: str) -> Dict[str, Any]:
-    """
-    Busca histórico completo de um usuário pelo telefone
-    
-    Args:
-        phone_number: Número de telefone
-        
-    Returns:
-        Dicionário com dados do usuário e histórico
-    """
+    """Busca histórico de usuário"""
     try:
-        # Busca usuário
         user = persistence_manager.get_user_by_phone(phone_number)
         if not user:
             return {"error": "Usuário não encontrado"}
         
-        # Busca sessões do usuário
         sessions = persistence_manager.get_user_sessions(user.user_id)
-        
-        # Busca mensagens de cada sessão
         sessions_with_messages = []
+        
         for session in sessions:
             messages = persistence_manager.get_session_messages(session.session_id)
             sessions_with_messages.append({
@@ -442,5 +529,5 @@ def get_user_history(phone_number: str) -> Dict[str, Any]:
 
 
 def get_data_stats() -> Dict[str, Any]:
-    """Retorna estatísticas dos dados persistidos"""
+    """Retorna estatísticas dos dados"""
     return persistence_manager.get_stats()

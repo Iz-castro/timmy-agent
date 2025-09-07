@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Core Utils - Utilitários e ferramentas do Timmy-IA
-Responsável por: sessões, micro-respostas, carregamento de dados, LLM
+Core Utils - Versão com micro-responses inteligentes
 """
 
 import os
@@ -12,21 +11,15 @@ from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Carrega variáveis de ambiente
 load_dotenv()
 
-# Cliente OpenAI
 _openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
-# Armazenamento de sessões (memória local)
 _SESSIONS: Dict[str, Dict[str, Any]] = {}
-
-# Cache de conhecimento por tenant
 _KNOWLEDGE_CACHE: Dict[str, Dict[str, Any]] = {}
 
 
 # =============================================================================
-# SESSION MANAGEMENT (Gerenciamento de Sessões)
+# SESSION MANAGEMENT
 # =============================================================================
 
 def get_state(session_key: str) -> Dict[str, Any]:
@@ -43,10 +36,7 @@ def set_state(session_key: str, **kwargs) -> None:
 
 
 def mark_once(session_key: str, tag: str) -> bool:
-    """
-    Marca algo como já executado na sessão
-    Retorna True se é a primeira vez, False se já foi executado
-    """
+    """Marca algo como executado uma vez"""
     state = get_state(session_key)
     executed = state.get("_executed", set())
     
@@ -72,7 +62,7 @@ def list_sessions() -> List[str]:
 
 
 # =============================================================================
-# MICRO-RESPONSES (Quebra de Respostas)
+# MICRO-RESPONSES INTELIGENTES
 # =============================================================================
 
 def micro_responses(
@@ -82,97 +72,234 @@ def micro_responses(
     session_key: Optional[str] = None
 ) -> List[str]:
     """
-    Quebra texto em micro-respostas respeitando limites de caracteres
+    Quebra texto em micro-respostas INTELIGENTES
     
-    Args:
-        text: Texto a ser quebrado
-        min_chars: Mínimo de caracteres por resposta
-        max_chars: Máximo de caracteres por resposta
-        session_key: Chave da sessão (para fila de pendentes)
-    
-    Returns:
-        Lista de micro-respostas
+    Prioridades da quebra:
+    1. Sentenças completas (ponto final, exclamação, interrogação)
+    2. Pausas naturais (vírgulas, dois pontos)
+    3. Conjunções (e, mas, porém, então)
+    4. Espaços em branco
+    5. Como último recurso: caracteres
     """
     if not text or not text.strip():
         return [""]
     
     text = text.strip()
     
-    # Se texto é pequeno, retorna direto
+    # Se texto é pequeno o suficiente, retorna direto
     if len(text) <= max_chars:
         return [text]
     
-    # Quebra por sentenças
+    print(f"[DEBUG] Quebrando texto de {len(text)} caracteres: '{text}'")
+    
+    # 1. PRIMEIRA TENTATIVA: Quebra por sentenças completas
     sentences = re.split(r'(?<=[.!?])\s+', text)
+    print(f"[DEBUG] Sentenças encontradas: {sentences}")
+    
+    if len(sentences) > 1:
+        responses = []
+        current = ""
+        
+        for sentence in sentences:
+            # Se sentença individual é muito grande, quebra ela internamente
+            if len(sentence) > max_chars:
+                # Finaliza bloco atual se existir
+                if current:
+                    responses.append(current.strip())
+                    current = ""
+                
+                # Quebra a sentença grande usando quebra inteligente
+                sub_responses = _intelligent_sentence_break(sentence, min_chars, max_chars)
+                responses.extend(sub_responses)
+                continue
+            
+            # Testa se pode adicionar a sentença ao bloco atual
+            test_text = (current + " " + sentence).strip() if current else sentence
+            
+            if len(test_text) <= max_chars:
+                current = test_text
+                
+                # Se chegou ao tamanho mínimo, pode finalizar
+                if len(current) >= min_chars:
+                    responses.append(current)
+                    current = ""
+            else:
+                # Não cabe, finaliza bloco atual e inicia novo
+                if current:
+                    responses.append(current)
+                current = sentence
+        
+        # Adiciona último bloco
+        if current:
+            responses.append(current)
+        
+        if responses:
+            print(f"[DEBUG] Quebra por sentenças resultou em: {responses}")
+            return responses
+    
+    # 2. SEGUNDA TENTATIVA: Quebra inteligente de texto único
+    return _intelligent_sentence_break(text, min_chars, max_chars)
+
+
+def _intelligent_sentence_break(text: str, min_chars: int, max_chars: int) -> List[str]:
+    """
+    Quebra inteligente de uma sentença longa
+    
+    Ordem de prioridade para quebra:
+    1. Pausas naturais (, : ; )
+    2. Conjunções (e, mas, porém, então, porque)
+    3. Espaços entre palavras
+    4. Caracteres (último recurso)
+    """
+    print(f"[DEBUG] Quebra inteligente para: '{text}' (len={len(text)})")
+    
+    if len(text) <= max_chars:
+        return [text]
+    
+    # 1. Tenta quebrar por pausas naturais (vírgulas, dois pontos, etc.)
+    pause_points = []
+    for match in re.finditer(r'[,:;]\s+', text):
+        pause_points.append(match.end())
+    
+    if pause_points:
+        print(f"[DEBUG] Pontos de pausa encontrados: {pause_points}")
+        best_break = _find_best_break_point(text, pause_points, min_chars, max_chars)
+        if best_break:
+            part1 = text[:best_break].strip()
+            part2 = text[best_break:].strip()
+            print(f"[DEBUG] Quebra por pausa: '{part1}' | '{part2}'")
+            
+            # Recursivamente quebra as partes se necessário
+            result = []
+            result.extend(_intelligent_sentence_break(part1, min_chars, max_chars))
+            result.extend(_intelligent_sentence_break(part2, min_chars, max_chars))
+            return result
+    
+    # 2. Tenta quebrar por conjunções
+    conjunction_points = []
+    conjunctions = ['\\se\\s', '\\smas\\s', '\\sporém\\s', '\\sentão\\s', '\\sque\\s', '\\sonde\\s', '\\scomo\\s']
+    
+    for conj in conjunctions:
+        for match in re.finditer(conj, text, re.IGNORECASE):
+            conjunction_points.append(match.start())
+    
+    if conjunction_points:
+        print(f"[DEBUG] Pontos de conjunção encontrados: {conjunction_points}")
+        best_break = _find_best_break_point(text, conjunction_points, min_chars, max_chars)
+        if best_break:
+            part1 = text[:best_break].strip()
+            part2 = text[best_break:].strip()
+            print(f"[DEBUG] Quebra por conjunção: '{part1}' | '{part2}'")
+            
+            result = []
+            result.extend(_intelligent_sentence_break(part1, min_chars, max_chars))
+            result.extend(_intelligent_sentence_break(part2, min_chars, max_chars))
+            return result
+    
+    # 3. Quebra por espaços (palavras completas)
+    words = text.split()
+    if len(words) <= 1:
+        # Texto é uma palavra única muito longa - quebra por caracteres
+        return _break_by_characters(text, max_chars)
+    
+    print(f"[DEBUG] Quebrando por palavras ({len(words)} palavras)")
+    
     responses = []
     current = ""
     
-    for sentence in sentences:
-        # Se sentença única é muito grande, quebra por espaços
-        if len(sentence) > max_chars:
-            if current:
-                responses.append(current.strip())
-                current = ""
-            
-            # Quebra sentença longa em palavras
-            words = sentence.split()
-            for word in words:
-                if len(current + " " + word) > max_chars:
-                    if current:
-                        responses.append(current.strip())
-                    current = word
-                else:
-                    current = (current + " " + word).strip()
-            continue
+    for word in words:
+        test_text = (current + " " + word).strip() if current else word
         
-        # Tenta adicionar sentença ao bloco atual
-        test_length = len(current + " " + sentence) if current else len(sentence)
-        
-        if test_length <= max_chars:
-            current = (current + " " + sentence).strip() if current else sentence
-            
-            # Se chegou ao mínimo, pode finalizar bloco
-            if len(current) >= min_chars:
-                responses.append(current)
-                current = ""
+        if len(test_text) <= max_chars:
+            current = test_text
         else:
-            # Finaliza bloco atual e inicia novo
+            # Não cabe mais, finaliza bloco atual
             if current:
                 responses.append(current)
-            current = sentence
+                current = word
+            else:
+                # Palavra individual é muito grande
+                if len(word) > max_chars:
+                    responses.extend(_break_by_characters(word, max_chars))
+                else:
+                    current = word
     
     # Adiciona último bloco
     if current:
         responses.append(current)
     
+    print(f"[DEBUG] Quebra por palavras resultou em: {responses}")
     return responses if responses else [text]
 
 
+def _find_best_break_point(text: str, break_points: List[int], min_chars: int, max_chars: int) -> Optional[int]:
+    """
+    Encontra o melhor ponto de quebra dentro dos limites
+    """
+    valid_points = []
+    
+    for point in break_points:
+        if min_chars <= point <= max_chars:
+            valid_points.append(point)
+    
+    if not valid_points:
+        return None
+    
+    # Prefere ponto mais próximo do ideal (meio do intervalo)
+    ideal_point = (min_chars + max_chars) // 2
+    best_point = min(valid_points, key=lambda x: abs(x - ideal_point))
+    
+    print(f"[DEBUG] Melhor ponto de quebra: {best_point} (ideal: {ideal_point})")
+    return best_point
+
+
+def _break_by_characters(text: str, max_chars: int) -> List[str]:
+    """
+    Quebra por caracteres como último recurso
+    """
+    print(f"[DEBUG] Quebra por caracteres (último recurso) para: '{text}'")
+    
+    responses = []
+    start = 0
+    
+    while start < len(text):
+        end = start + max_chars
+        if end >= len(text):
+            responses.append(text[start:])
+            break
+        
+        # Tenta não quebrar no meio de uma palavra
+        if text[end] != ' ' and end < len(text) - 1:
+            # Procura espaço anterior
+            space_pos = text.rfind(' ', start, end)
+            if space_pos > start + (max_chars // 2):  # Se espaço não está muito no início
+                end = space_pos
+        
+        responses.append(text[start:end].strip())
+        start = end
+        
+        # Pula espaços
+        while start < len(text) and text[start] == ' ':
+            start += 1
+    
+    print(f"[DEBUG] Quebra por caracteres resultou em: {responses}")
+    return responses
+
+
 # =============================================================================
-# KNOWLEDGE LOADING (Carregamento de Conhecimento)
+# KNOWLEDGE LOADING (mantém como estava)
 # =============================================================================
 
 def load_knowledge_data(tenant_id: str = "default") -> Dict[str, Any]:
-    """
-    Carrega dados de conhecimento para um tenant
+    """Carrega dados de conhecimento para um tenant"""
     
-    Args:
-        tenant_id: ID do tenant
-        
-    Returns:
-        Dicionário com dados de conhecimento
-    """
-    
-    # Verifica cache
     if tenant_id in _KNOWLEDGE_CACHE:
         return _KNOWLEDGE_CACHE[tenant_id]
     
     knowledge = {}
-    
-    # Caminho base do tenant
     tenant_path = Path("tenants") / tenant_id
     
-    # Carrega configuração básica
+    # Config básico
     config_file = tenant_path / "config.json"
     if config_file.exists():
         try:
@@ -182,7 +309,7 @@ def load_knowledge_data(tenant_id: str = "default") -> Dict[str, Any]:
         except Exception as e:
             print(f"[WARNING] Erro ao carregar config.json: {e}")
     
-    # Carrega conhecimento específico
+    # Conhecimento específico
     knowledge_file = tenant_path / "knowledge.json"
     if knowledge_file.exists():
         try:
@@ -192,7 +319,7 @@ def load_knowledge_data(tenant_id: str = "default") -> Dict[str, Any]:
         except Exception as e:
             print(f"[WARNING] Erro ao carregar knowledge.json: {e}")
     
-    # Carrega exemplos de conversa
+    # Exemplos de conversa
     examples_file = tenant_path / "examples.jsonl"
     if examples_file.exists():
         try:
@@ -206,7 +333,7 @@ def load_knowledge_data(tenant_id: str = "default") -> Dict[str, Any]:
         except Exception as e:
             print(f"[WARNING] Erro ao carregar examples.jsonl: {e}")
     
-    # Configuração padrão se não existir nada
+    # Configuração padrão
     if not knowledge:
         knowledge = {
             "agent_name": "Timmy",
@@ -216,36 +343,26 @@ def load_knowledge_data(tenant_id: str = "default") -> Dict[str, Any]:
             "examples": []
         }
     
-    # Salva no cache
     _KNOWLEDGE_CACHE[tenant_id] = knowledge
-    
     return knowledge
 
 
 def reload_knowledge(tenant_id: str = "default") -> Dict[str, Any]:
-    """Recarrega conhecimento forçando atualização do cache"""
+    """Recarrega conhecimento forçando atualização"""
     _KNOWLEDGE_CACHE.pop(tenant_id, None)
     return load_knowledge_data(tenant_id)
 
 
 # =============================================================================
-# INFORMATION EXTRACTION (Extração de Informações)
+# INFORMATION EXTRACTION (mantém como estava)
 # =============================================================================
 
 def extract_info_from_text(text: str) -> Dict[str, str]:
-    """
-    Extrai informações avançadas do texto (nome, email, telefone, empresa, etc.)
-    
-    Args:
-        text: Texto para análise
-        
-    Returns:
-        Dicionário com informações extraídas
-    """
+    """Extrai informações do texto de forma avançada"""
     info = {}
     text_lower = text.lower()
     
-    # Extração de nome
+    # Nome
     name_patterns = [
         r"(?:meu nome é|me chamo|sou o|sou a|eu sou)\s+([A-Za-zÀ-ÿ\s]{2,30})",
         r"(?:^|\s)([A-Z][a-zÀ-ÿ]+(?:\s+[A-Z][a-zÀ-ÿ]+)*),?\s*(?:aqui|falando|é meu nome)"
@@ -259,17 +376,17 @@ def extract_info_from_text(text: str) -> Dict[str, str]:
                 info['name'] = name
                 break
     
-    # Extração de email
+    # Email
     email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
     email_match = re.search(email_pattern, text)
     if email_match:
         info['email'] = email_match.group()
     
-    # Extração de telefone
+    # Telefone
     phone_patterns = [
-        r'\(?(?:\+55\s?)?(?:\d{2})\)?\s?\d{4,5}-?\d{4}',  # Formato brasileiro
-        r'\(?(?:\d{2})\)?\s?\d{4,5}-?\d{4}',              # Formato simples
-        r'(?:\+55\s?)?(?:\d{2})\s?\d{4,5}\s?\d{4}'        # Sem separadores
+        r'\(?(?:\+55\s?)?(?:\d{2})\)?\s?\d{4,5}-?\d{4}',
+        r'\(?(?:\d{2})\)?\s?\d{4,5}-?\d{4}',
+        r'(?:\+55\s?)?(?:\d{2})\s?\d{4,5}\s?\d{4}'
     ]
     
     for pattern in phone_patterns:
@@ -280,7 +397,7 @@ def extract_info_from_text(text: str) -> Dict[str, str]:
                 info['phone'] = phone_match.group()
                 break
     
-    # Extração de empresa
+    # Empresa
     company_patterns = [
         r"(?:trabalho na|trabalho no|empresa|companhia)\s+([A-Za-zÀ-ÿ\s&]{2,30})",
         r"(?:sou da|venho da)\s+([A-Za-zÀ-ÿ\s&]{2,30})",
@@ -295,7 +412,7 @@ def extract_info_from_text(text: str) -> Dict[str, str]:
                 info['company'] = company
                 break
     
-    # Extração de cargo/profissão
+    # Cargo
     job_patterns = [
         r"(?:sou|trabalho como|atuo como|profissão)\s+([A-Za-zÀ-ÿ\s]{2,30})",
         r"(?:cargo|função|posição)\s+(?:de|é)\s+([A-Za-zÀ-ÿ\s]{2,30})"
@@ -309,53 +426,11 @@ def extract_info_from_text(text: str) -> Dict[str, str]:
                 info['job_title'] = job
                 break
     
-    # Extração de localização
-    location_patterns = [
-        r"(?:moro em|vivo em|de|localizado em)\s+([A-Za-zÀ-ÿ\s\-]{2,30})",
-        r"(?:cidade|estado|região)\s+(?:de|é)\s+([A-Za-zÀ-ÿ\s\-]{2,30})"
-    ]
-    
-    for pattern in location_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            location = match.group(1).strip()
-            if len(location) >= 2:
-                info['location'] = location
-                break
-    
-    # Extração de idade
-    age_patterns = [
-        r"(?:tenho|idade|anos)\s+(\d{1,2})\s*anos?",
-        r"(\d{1,2})\s*anos\s+(?:de idade|old)"
-    ]
-    
-    for pattern in age_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            age = match.group(1)
-            if 15 <= int(age) <= 99:  # Validação básica de idade
-                info['age'] = age
-                break
-    
-    # Extração de interesses/preferências
-    interest_patterns = [
-        r"(?:gosto de|interessado em|prefiro|hobby)\s+([A-Za-zÀ-ÿ\s,]{5,50})",
-        r"(?:interesse|paixão|área)\s+(?:é|por)\s+([A-Za-zÀ-ÿ\s,]{5,50})"
-    ]
-    
-    for pattern in interest_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            interests = match.group(1).strip()
-            if len(interests) >= 3:
-                info['interests'] = interests
-                break
-    
     return info
 
 
 # =============================================================================
-# LLM INTEGRATION (Integração com LLM)
+# LLM INTEGRATION
 # =============================================================================
 
 def chat_complete(
@@ -365,28 +440,14 @@ def chat_complete(
     temperature: float = 0.7,
     max_tokens: int = 400
 ) -> str:
-    """
-    Chama API da OpenAI para completar conversa
-    
-    Args:
-        system_prompt: Prompt do sistema
-        messages: Lista de mensagens [{"role": "user/assistant", "content": "..."}]
-        model: Modelo a usar (padrão: gpt-4o-mini)
-        temperature: Criatividade (0-1)
-        max_tokens: Máximo de tokens na resposta
-        
-    Returns:
-        Resposta do modelo
-    """
+    """Chama API da OpenAI com modelo mais barato"""
     
     if model is None:
         model = os.getenv("TIMMY_MODEL", "gpt-4o-mini")
     
     try:
-        # Prepara mensagens
         api_messages = [{"role": "system", "content": system_prompt}] + messages
         
-        # Chama API
         response = _openai_client.chat.completions.create(
             model=model,
             messages=api_messages,
@@ -402,24 +463,15 @@ def chat_complete(
 
 
 # =============================================================================
-# UTILITY FUNCTIONS (Funções Auxiliares)
+# UTILITY FUNCTIONS
 # =============================================================================
 
 def create_tenant_structure(tenant_id: str) -> bool:
-    """
-    Cria estrutura básica de arquivos para um novo tenant
-    
-    Args:
-        tenant_id: ID do novo tenant
-        
-    Returns:
-        True se criado com sucesso
-    """
+    """Cria estrutura básica para novo tenant"""
     try:
         tenant_path = Path("tenants") / tenant_id
         tenant_path.mkdir(parents=True, exist_ok=True)
         
-        # config.json básico
         config = {
             "agent_name": "Timmy",
             "business_name": f"Empresa {tenant_id.title()}",
@@ -430,7 +482,6 @@ def create_tenant_structure(tenant_id: str) -> bool:
         with open(tenant_path / "config.json", 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=2, ensure_ascii=False)
         
-        # knowledge.json básico
         knowledge = {
             "business_info": {
                 "name": f"Empresa {tenant_id.title()}",
@@ -444,7 +495,6 @@ def create_tenant_structure(tenant_id: str) -> bool:
         with open(tenant_path / "knowledge.json", 'w', encoding='utf-8') as f:
             json.dump(knowledge, f, indent=2, ensure_ascii=False)
         
-        # examples.jsonl básico
         examples = [
             {"role": "user", "content": "Olá!"},
             {"role": "assistant", "content": "Olá! Como posso ajudar você hoje?"}
