@@ -18,7 +18,7 @@ from core.utils import (
 
 from core.persistence import (
     UserInfo, SessionInfo, ConversationMessage,
-    persistence_manager, get_or_create_user_by_phone
+    persistence_manager, get_or_create_user_by_phone, save_message
 )
 
 
@@ -38,14 +38,17 @@ class Message:
 class ConversationReviewer:
     """Sistema de releitura completa da conversa"""
     
-    def __init__(self, session_key: str):
+    def __init__(self, session_key: str, tenant_id: str = "default"):
         self.session_key = session_key
+        self.tenant_id = tenant_id
     
     def get_full_conversation_history(self) -> List[Dict[str, str]]:
         """Recupera todo o histórico da conversa da sessão atual"""
+        print(f"[DEBUG] Buscando histórico completo para sessão: {self.session_key}")
+        
         try:
-            # Busca todas as mensagens da sessão
-            messages = persistence_manager.get_session_messages(self.session_key)
+            # Busca todas as mensagens da sessão no tenant específico
+            messages = persistence_manager.get_session_messages(self.session_key, self.tenant_id)
             
             conversation_history = []
             for msg in messages:
@@ -55,11 +58,19 @@ class ConversationReviewer:
                     "timestamp": msg.timestamp
                 })
             
-            print(f"[CONVERSATION] Recuperadas {len(conversation_history)} mensagens da sessão")
+            print(f"[DEBUG] Recuperadas {len(conversation_history)} mensagens da sessão")
+            
+            # Debug: mostra últimas 3 mensagens
+            if conversation_history:
+                print(f"[DEBUG] Últimas mensagens:")
+                for i, msg in enumerate(conversation_history[-3:], 1):
+                    print(f"[DEBUG]   {i}. {msg['role']}: {msg['content'][:50]}...")
+            
             return conversation_history
             
         except Exception as e:
-            print(f"[ERROR] Erro ao recuperar histórico: {e}")
+            print(f"[ERROR DEBUG] Erro ao recuperar histórico: {e}")
+            print(f"[ERROR DEBUG] Traceback: {traceback.format_exc()}")
             return []
     
     def format_conversation_for_review(self, history: List[Dict[str, str]]) -> str:
@@ -77,13 +88,24 @@ class ConversationReviewer:
     
     def generate_conversation_context(self) -> str:
         """Gera contexto rico baseado na conversa completa"""
+        print(f"[DEBUG] Gerando contexto da conversa...")
+        
         history = self.get_full_conversation_history()
         
         if not history:
+            print(f"[DEBUG] Nenhum histórico encontrado - primeira mensagem")
             return ""
         
         # Formata para análise
         formatted_conversation = self.format_conversation_for_review(history)
+        
+        user_name = self._extract_user_name_from_history(history)
+        shared_info = self._extract_shared_info_from_history(history)
+        already_introduced = self._check_if_already_introduced(history)
+        
+        print(f"[DEBUG] Nome extraído: {user_name}")
+        print(f"[DEBUG] Já se apresentou: {already_introduced}")
+        print(f"[DEBUG] Info compartilhada: {shared_info}")
         
         # Adiciona análise contextual
         context_analysis = f"""
@@ -92,11 +114,12 @@ class ConversationReviewer:
 ANÁLISE PARA PRÓXIMA RESPOSTA:
 - Total de mensagens na conversa: {len(history)}
 - Primeira interação: {"Sim" if len(history) <= 2 else "Não"}
-- Já me apresentei: {"Sim" if any("sou" in msg.get("content", "").lower() and msg.get("role") == "assistant" for msg in history) else "Não"}
-- Nome do usuário conhecido: {self._extract_user_name_from_history(history)}
-- Informações já compartilhadas: {self._extract_shared_info_from_history(history)}
+- Já me apresentei: {"Sim" if already_introduced else "Não"}
+- Nome do usuário conhecido: {user_name}
+- Informações já compartilhadas: {shared_info}
 """
         
+        print(f"[DEBUG] Contexto gerado com {len(context_analysis)} caracteres")
         return context_analysis
     
     def _extract_user_name_from_history(self, history: List[Dict[str, str]]) -> str:
@@ -136,6 +159,15 @@ ANÁLISE PARA PRÓXIMA RESPOSTA:
                     shared_info.append("Interesses mencionados")
         
         return ", ".join(shared_info) if shared_info else "Nenhuma informação específica"
+    
+    def _check_if_already_introduced(self, history: List[Dict[str, str]]) -> bool:
+        """Verifica se já se apresentou analisando mensagens do assistente"""
+        for msg in history:
+            if msg["role"] == "assistant":
+                content = msg["content"].lower()
+                if any(phrase in content for phrase in ["sou", "eu sou", "assistente"]):
+                    return True
+        return False
 
 
 class TimmyAgent:
@@ -212,18 +244,28 @@ REGRAS DE RESPOSTA:
     def _should_send_greeting(self, conversation_history: List[Dict]) -> bool:
         """Determina se deve enviar saudação baseado no histórico completo"""
         
+        print(f"[DEBUG] Verificando se deve enviar saudação...")
+        print(f"[DEBUG] Histórico tem {len(conversation_history)} mensagens")
+        
         # Se não há histórico, é primeira interação
         if not conversation_history:
+            print(f"[DEBUG] Sem histórico - primeira interação!")
             return True
         
         # Verifica se já se apresentou
+        already_introduced = self._check_if_already_introduced(conversation_history)
+        print(f"[DEBUG] Já se apresentou: {already_introduced}")
+        
+        return not already_introduced
+    
+    def _check_if_already_introduced(self, conversation_history: List[Dict]) -> bool:
+        """Verifica se já se apresentou"""
         for msg in conversation_history:
             if msg["role"] == "assistant":
                 content = msg["content"].lower()
                 if any(phrase in content for phrase in ["sou", "eu sou", "assistente"]):
-                    return False  # Já se apresentou
-        
-        return True  # Ainda não se apresentou
+                    return True
+        return False
     
     def _handle_first_interaction(self, message: Message, conversation_history: List[Dict]) -> List[str]:
         """Lida com primeira interação baseado no histórico completo"""
@@ -282,7 +324,7 @@ REGRAS DE RESPOSTA:
             return {}
     
     def _persist_user_data(self, session_key: str, current_state: Dict, new_info: Dict):
-        """Persiste dados do usuário"""
+        """Persiste dados do usuário usando estrutura por tenant"""
         try:
             all_user_data = {**current_state, **new_info}
             
@@ -290,7 +332,7 @@ REGRAS DE RESPOSTA:
             if not user_id:
                 phone = all_user_data.get("phone")
                 if phone:
-                    existing_user = persistence_manager.get_user_by_phone(phone)
+                    existing_user = persistence_manager.get_user_by_phone(phone, self.tenant_id)
                     if existing_user:
                         user_id = existing_user.user_id
                         set_state(session_key, user_id=user_id)
@@ -312,12 +354,13 @@ REGRAS DE RESPOSTA:
                 age=all_user_data.get("age"),
                 interests=all_user_data.get("interests"),
                 preferences=all_user_data.get("preferences"),
-                notes=all_user_data.get("notes")
+                notes=all_user_data.get("notes"),
+                tenant_id=self.tenant_id
             )
             
             persistence_manager.save_user_info(user_info)
             
-            session_info = persistence_manager.get_session_by_id(session_key)
+            session_info = persistence_manager.get_session_by_id(session_key, self.tenant_id)
             if not session_info:
                 session_info = SessionInfo(
                     session_id=session_key,
@@ -336,9 +379,10 @@ REGRAS DE RESPOSTA:
             
         except Exception as e:
             print(f"[ERROR] Erro em _persist_user_data: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
     
     def _save_message(self, session_key: str, role: str, content: str, intent: str = None):
-        """Salva mensagem no histórico"""
+        """Salva mensagem no histórico usando estrutura por tenant"""
         try:
             current_state = get_state(session_key)
             user_id = current_state.get("user_id")
@@ -353,8 +397,9 @@ REGRAS DE RESPOSTA:
                 intent=intent
             )
             
-            persistence_manager.save_message(message)
-            persistence_manager.update_session_message_count(session_key)
+            # Salva mensagem no arquivo específico da conversa
+            save_message(message, self.tenant_id)
+            persistence_manager.update_session_message_count(session_key, self.tenant_id)
             
             # Atualiza contador local
             message_count = current_state.get("message_count", 0) + 1
@@ -362,6 +407,7 @@ REGRAS DE RESPOSTA:
             
         except Exception as e:
             print(f"[ERROR] Erro em _save_message: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
     
     def _generate_contextual_response(self, message: Message, conversation_context: str) -> str:
         """Gera resposta com base no contexto completo da conversa"""
@@ -401,8 +447,8 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
     try:
         agent = TimmyAgent(tenant_id)
         
-        # Inicializa revisor de conversa
-        conversation_reviewer = ConversationReviewer(message.session_key)
+        # Inicializa revisor de conversa com tenant_id
+        conversation_reviewer = ConversationReviewer(message.session_key, tenant_id)
         
         # PASSO 1: Salva a mensagem do usuário PRIMEIRO
         print(f"[DEBUG] PASSO 1: Salvando mensagem do usuário...")
@@ -474,10 +520,10 @@ def process_message(text: str, session_key: str = None, tenant_id: str = "defaul
         
         if phone_number:
             session_key = f"phone_{phone_number.replace('+', '').replace(' ', '')}"
-            user = get_or_create_user_by_phone(phone_number)
+            user = get_or_create_user_by_phone(phone_number, tenant_id=tenant_id)
             set_state(session_key, user_id=user.user_id, phone=phone_number)
             
-            session_info = persistence_manager.get_session_by_id(session_key)
+            session_info = persistence_manager.get_session_by_id(session_key, tenant_id)
             if not session_info:
                 session_info = SessionInfo(
                     session_id=session_key,
@@ -501,18 +547,18 @@ def process_message(text: str, session_key: str = None, tenant_id: str = "defaul
         return [f"Erro em process_message: {str(e)}"]
 
 
-def get_user_history(phone_number: str) -> Dict[str, Any]:
-    """Busca histórico de usuário"""
+def get_user_history(phone_number: str, tenant_id: str = "default") -> Dict[str, Any]:
+    """Busca histórico de usuário no tenant específico"""
     try:
-        user = persistence_manager.get_user_by_phone(phone_number)
+        user = persistence_manager.get_user_by_phone(phone_number, tenant_id)
         if not user:
             return {"error": "Usuário não encontrado"}
         
-        sessions = persistence_manager.get_user_sessions(user.user_id)
+        sessions = persistence_manager.get_user_sessions(user.user_id, tenant_id)
         sessions_with_messages = []
         
         for session in sessions:
-            messages = persistence_manager.get_session_messages(session.session_id)
+            messages = persistence_manager.get_session_messages(session.session_id, tenant_id)
             sessions_with_messages.append({
                 "session_info": session,
                 "messages": messages
@@ -528,6 +574,11 @@ def get_user_history(phone_number: str) -> Dict[str, Any]:
         return {"error": f"Erro ao buscar histórico: {e}"}
 
 
-def get_data_stats() -> Dict[str, Any]:
-    """Retorna estatísticas dos dados"""
-    return persistence_manager.get_stats()
+def get_data_stats(tenant_id: str = "default") -> Dict[str, Any]:
+    """Retorna estatísticas dos dados do tenant específico"""
+    return persistence_manager.get_tenant_stats(tenant_id)
+
+
+def get_all_tenants_stats() -> Dict[str, Any]:
+    """Retorna estatísticas de todos os tenants"""
+    return persistence_manager.get_all_tenants_stats()

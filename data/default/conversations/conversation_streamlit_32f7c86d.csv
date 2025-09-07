@@ -1,0 +1,13 @@
+message_id,session_id,user_id,timestamp,role,content,intent,sentiment,extracted_info,response_time_ms
+53537977-feb7-4479-aae8-dc55fa5424c4,streamlit_32f7c86d,,2025-09-07T18:03:30.534317,user,Oi timmy,general,,,
+7816174e-4c03-432e-bf68-90e920ba9ce2,streamlit_32f7c86d,,2025-09-07T18:03:30.541192,assistant,"Boa noite! Eu sou Timmy, assistente de nossa empresa. Vi que você quer saber sobre algo específico. Vou te ajudar!",greeting,,,
+547b0180-69b9-4c9b-a7aa-6fc74d9c8cf6,streamlit_32f7c86d,,2025-09-07T18:03:53.926763,user,Só para saber se você esta funcionando corretamente. Me chamo Izael. ,general,,,
+1a73c7ba-5c43-4cc7-a5e6-646e53f3d1b1,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:03:55.758121,assistant,"Oi, Izael! Estou funcionando perfeitamente. Como posso te ajudar hoje?",general,,,
+e1d7eff2-35d5-4ca8-8606-9144e299572b,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:04:17.664270,user,Você é meu projeto principal de trabalho atualmente. Sou cientista de dados. ,general,,,
+fc79df07-710c-44aa-baa0-76a99c583c51,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:04:19.444468,assistant,"Que legal, Izael! Ser seu projeto principal é uma grande responsabilidade.",general,,,
+c4bd8932-5198-48db-98b3-6769c7e80e23,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:04:19.451458,assistant,Em que parte do seu trabalho como cientista de dados você precisa de ajuda?,general,,,
+46b43d20-0d07-42d9-8741-e7b37fc90977,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:04:48.979008,user,Na verdade você é um agente conversacional que estou trabalhando. Muito obrigado por estar funcionando corretamente!,general,,,
+275bad0d-92d4-43ff-87a9-ed3cf5589f83,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:04:50.426059,assistant,"Fico feliz em saber que sou parte do seu projeto, Izael!",farewell,,,
+163105d0-0e31-4db7-9465-5fe3a55fc94d,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:04:50.429842,assistant,"Se precisar de algo específico para aprimorar o agente, é só me avisar.",farewell,,,
+c7afac65-030f-4d35-b0d4-2aa9100dcfdd,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:05:00.424596,user,"Falarei, por agora é so isso.",general,,,
+c9ced4ee-5eeb-4d32-92ab-34169a684598,streamlit_32f7c86d,9f675ff2-b3ee-4638-b4db-27e7b2843235,2025-09-07T18:05:01.795515,assistant,"Claro, Izael! Fico à disposição para ajudar com seu projeto quando precisar. Boa sorte com o desenvolvimento do agente!",general,,,

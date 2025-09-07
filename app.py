@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Timmy-IA - Interface Streamlit
-Aplicação web simples para testar o agente conversacional
+Aplicação web com estrutura organizada por tenant
 """
 
 import os
@@ -15,7 +15,7 @@ load_dotenv()
 
 # Importa o agente principal
 try:
-    from core.agent import handle_turn, Message, get_user_history, get_data_stats
+    from core.agent import handle_turn, Message, get_user_history, get_data_stats, get_all_tenants_stats
     from core.utils import get_state, clear_session, get_system_stats, list_sessions
     from core.persistence import persistence_manager
 except ImportError as e:
@@ -96,8 +96,18 @@ with col2:
 # Estatísticas do sistema
 st.sidebar.markdown("---")
 if st.sidebar.checkbox("📈 Estatísticas do Sistema"):
-    stats = get_system_stats()
-    st.sidebar.json(stats)
+    system_stats = get_system_stats()
+    st.sidebar.json(system_stats)
+
+# Estatísticas do tenant atual
+if st.sidebar.checkbox("📊 Estatísticas do Tenant"):
+    tenant_stats = get_data_stats(tenant_id)
+    st.sidebar.json(tenant_stats, expanded=True)
+
+# Estatísticas de todos os tenants
+if st.sidebar.checkbox("🌐 Todos os Tenants"):
+    all_stats = get_all_tenants_stats()
+    st.sidebar.json(all_stats, expanded=False)
 
 # =============================================================================
 # ÁREA PRINCIPAL
@@ -105,6 +115,19 @@ if st.sidebar.checkbox("📈 Estatísticas do Sistema"):
 
 st.title("🤖 Timmy-IA")
 st.caption(f"Assistente conversacional inteligente • Tenant: **{tenant_id}**")
+
+# Informações da nova estrutura
+if st.checkbox("ℹ️ Mostrar estrutura de dados"):
+    st.info(f"""
+    **Nova estrutura organizada por tenant:**
+    ```
+    data/
+    └── {tenant_id}/
+        ├── conversations/    # Um CSV por conversa
+        ├── sessions/        # Sessões do tenant
+        └── users/          # Usuários do tenant
+    ```
+    """)
 
 # Inicializa histórico de mensagens
 if "messages" not in st.session_state:
@@ -181,11 +204,13 @@ with st.expander("ℹ️ Como usar"):
     - 📝 **Coleta informações** automaticamente (nome, contato, etc.)
     - 🧠 **Responde com base** no conhecimento configurado
     - 💾 **Mantém contexto** durante toda a conversa
+    - 🏢 **Organizado por tenant** para múltiplos clientes
+    - 📁 **Arquivo separado** para cada conversa
     
     **Dicas:**
     - Mencione seu nome para que o Timmy te reconheça
     - Pergunte sobre produtos, serviços ou informações da empresa
-    - Use a sidebar para trocar de tenant ou iniciar nova sessão
+    - Use a sidebar para trocar de tenant ou ver estatísticas
     """)
 
 # Debug info (apenas em desenvolvimento)
@@ -196,6 +221,9 @@ if os.getenv("DEBUG", "false").lower() == "true":
         
         st.write("**Estatísticas do Sistema:**")
         st.json(get_system_stats())
+        
+        st.write("**Estatísticas do Tenant Atual:**")
+        st.json(get_data_stats(tenant_id))
         
         st.write("**Variáveis de Ambiente:**")
         env_vars = {
@@ -217,9 +245,12 @@ if os.getenv("DEBUG", "false").lower() == "true":
         else:
             st.write("Nenhuma sessão ativa")
 
-# Footer com informações da versão e métricas expandidas
+# Footer com métricas expandidas
 st.markdown("---")
 col1, col2, col3, col4 = st.columns(4)
+
+# Estatísticas do tenant atual
+tenant_stats = get_data_stats(tenant_id)
 
 with col1:
     st.metric("Sessões Ativas", len(list_sessions()))
@@ -229,21 +260,37 @@ with col2:
     st.metric("OpenAI API", api_status)
 
 with col3:
-    tenant_count = len(list_available_tenants())
-    st.metric("Tenants", tenant_count)
+    st.metric("Tenants", len(list_available_tenants()))
 
 with col4:
-    # 🔴 NOVO: Métrica de dados persistidos
-    data_stats = get_data_stats()
-    total_users = data_stats.get("total_users", 0)
+    total_conversations = tenant_stats.get("total_conversations", 0)
+    st.metric("Conversas", total_conversations)
+
+# Segunda linha de métricas específicas do tenant
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    total_users = tenant_stats.get("total_users", 0)
     st.metric("Usuários", total_users)
+
+with col2:
+    total_sessions = tenant_stats.get("total_sessions", 0)
+    st.metric("Sessões", total_sessions)
+
+with col3:
+    total_messages = tenant_stats.get("total_messages", 0)
+    st.metric("Mensagens", total_messages)
+
+with col4:
+    active_sessions_count = tenant_stats.get("active_sessions", 0)
+    st.metric("Ativas", active_sessions_count)
 
 # Footer com informações da versão
 st.markdown(
-    """
+    f"""
     <div style='text-align: center; color: #666; font-size: 0.8em; margin-top: 2rem;'>
-        🤖 <strong>Timmy-IA v1.0</strong> | Assistente Conversacional Inteligente<br>
-        <em>Criado com Streamlit + OpenAI + Python</em>
+        🤖 <strong>Timmy-IA v2.0</strong> | Assistente Conversacional com Estrutura por Tenant<br>
+        <em>Criado com Streamlit + OpenAI + Python | Tenant: {tenant_id}</em>
     </div>
     """, 
     unsafe_allow_html=True
