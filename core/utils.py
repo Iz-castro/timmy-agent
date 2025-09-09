@@ -519,3 +519,47 @@ def get_system_stats() -> Dict[str, Any]:
         "cached_tenants": len(_KNOWLEDGE_CACHE),
         "session_keys": list(_SESSIONS.keys())
     }
+    
+# ADICIONAR ao final do core/utils.py
+
+def load_tenant_workflow(tenant_id: str):
+    """Carrega workflow customizado do tenant"""
+    try:
+        import importlib.util
+        import json
+        
+        # Verifica se há configuração de workflow
+        config_path = Path(f"tenants/{tenant_id}/workflow_config.json")
+        if not config_path.exists():
+            print(f"[DEBUG] Sem workflow config para tenant: {tenant_id}")
+            return None
+        
+        # Carrega configuração
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            
+        workflow_type = config.get("workflow_type")
+        if not workflow_type:
+            print(f"[DEBUG] Workflow type não definido para tenant: {tenant_id}")
+            return None
+        
+        print(f"[DEBUG] Carregando workflow {workflow_type} para tenant: {tenant_id}")
+        
+        # Importa template correspondente
+        if workflow_type == "medical_base":
+            from core.workflows.medical_base import MedicalWorkflow
+            workflow = MedicalWorkflow(tenant_id, config)
+            print(f"[DEBUG] Workflow medical_base carregado com sucesso!")
+            return workflow
+        # elif workflow_type == "commerce_base":
+        #     from core.workflows.commerce_base import CommerceWorkflow
+        #     return CommerceWorkflow(tenant_id, config)
+        
+        print(f"[DEBUG] Tipo de workflow '{workflow_type}' não implementado")
+        return None
+    
+    except Exception as e:
+        print(f"[ERROR] Erro ao carregar workflow do tenant {tenant_id}: {e}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        return None

@@ -20,7 +20,7 @@ from core.persistence import (
     UserInfo, SessionInfo, ConversationMessage,
     persistence_manager, get_or_create_user_by_phone, save_message
 )
-
+from core.utils import load_tenant_workflow
 
 @dataclass
 class Message:
@@ -436,8 +436,9 @@ Responda de forma natural, consistente com a conversa e demonstrando que você a
             return "Desculpe, tive um problema técnico. Pode tentar novamente?"
 
 
+
 def handle_turn(tenant_id: str, message: Message) -> List[str]:
-    """Processa turno com releitura completa da conversa"""
+    """Processa turno com releitura completa da conversa + workflow customizado"""
     
     print(f"\n[DEBUG] ===== INICIANDO handle_turn =====")
     print(f"[DEBUG] tenant_id: {tenant_id}")
@@ -479,14 +480,35 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
                 agent._save_message(message.session_key, "assistant", response, "greeting")
             return first_interaction
         
-        # PASSO 6: Coleta informações do usuário
+        # 🔥 PASSO 5.5: Verifica se há workflow customizado
+        print(f"[DEBUG] PASSO 5.5: Verificando workflow customizado...")
+        workflow = load_tenant_workflow(tenant_id)
+        
+        if workflow and hasattr(workflow, 'process_message'):
+            print(f"[DEBUG] Workflow encontrado: {type(workflow).__name__}")
+            try:
+                workflow_response = workflow.process_message(message, conversation_context)
+                if workflow_response:
+                    print(f"[DEBUG] Workflow processou: '{workflow_response}'")
+                    responses = micro_responses(workflow_response, session_key=message.session_key)
+                    for response in responses:
+                        agent._save_message(message.session_key, "assistant", response, intent)
+                    print(f"[DEBUG] ===== handle_turn CONCLUÍDO (WORKFLOW) =====\n")
+                    return responses
+            except Exception as e:
+                print(f"[DEBUG] Erro no workflow: {e}")
+                import traceback
+                print(f"[DEBUG] Traceback do workflow: {traceback.format_exc()}")
+                # Continua com fluxo padrão
+                
+        # PASSO 6: Coleta informações do usuário (fluxo padrão)
         print(f"[DEBUG] PASSO 6: Coletando informações...")
         collected_info = agent._collect_user_info(message.text, message.session_key)
         
         if collected_info:
             print(f"[INFO] Coletado: {collected_info}")
-        
-        # PASSO 7: Gera resposta com contexto completo
+            
+        # PASSO 7: Gera resposta com contexto completo (fluxo padrão)
         print(f"[DEBUG] PASSO 7: Gerando resposta contextual...")
         response_text = agent._generate_contextual_response(message, conversation_context)
         print(f"[DEBUG] Resposta gerada: '{response_text}'")
@@ -500,19 +522,15 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
         print(f"[DEBUG] PASSO 9: Salvando respostas...")
         for response in responses:
             agent._save_message(message.session_key, "assistant", response, intent)
-        
+            
         print(f"[DEBUG] ===== handle_turn CONCLUÍDO =====\n")
         return responses
-        
+    
     except Exception as e:
         print(f"[ERROR DEBUG] Erro em handle_turn: {e}")
         print(f"[ERROR DEBUG] Traceback completo:")
         print(traceback.format_exc())
         return [f"Erro interno: {str(e)}"]
-
-
-def process_message(text: str, session_key: str = None, tenant_id: str = "default", phone_number: str = None) -> List[str]:
-    """Função simplificada para processar mensagem"""
     
     try:
         if not session_key:

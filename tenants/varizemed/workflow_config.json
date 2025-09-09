@@ -1,0 +1,34 @@
+{
+  "workflow_type": "medical_base",
+  "database_enabled": true,
+  "features": {
+    "symptom_triage": true,
+    "insurance_check": true,
+    "doctor_recommendation": true,
+    "appointment_scheduling": true,
+    "pricing_policy": "only_when_asked"
+  },
+  "business_rules": {
+    "terminology": "investimento",
+    "discount_pix": 5,
+    "max_installments": 3,
+    "director_keyword": ["melhor", "diretora", "referência", "solange"],
+    "human_handoff_triggers": ["urgencia", "cobrança", "cancelamento"],
+    "pricing_policy": "only_when_asked"
+  },
+  "scripts": {
+    "greeting": "Olá, {greeting_time}! Eu sou a Val, assistente virtual da Varizemed. É sua primeira vez conosco ou você já é paciente da clínica?",
+    "name_collection": [
+      "Posso saber o seu nome, por favor?",
+      "Entendi, você mencionou {summary}. E como posso te chamar para registrar seu atendimento?",
+      "Para finalizar, qual é o seu nome completo?"
+    ],
+    "clinic_info": {
+      "address": "Rua Jornalista Djalma de Andrade, 46 - Salas 502/503, Belvedere, Belo Horizonte/MG",
+      "reference": "Prédio do Relógio, 170m do Shopping Botânico",
+      "hours": "Seg-Qui 8h-18h, Sex 8h-17h",
+      "phone": "(31) 98479-2315",
+      "whatsapp": "(31) 97213-4698"
+    }
+  }
+}

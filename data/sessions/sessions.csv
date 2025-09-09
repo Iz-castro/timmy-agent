@@ -1,2 +1,6 @@
 session_id,user_id,tenant_id,channel,phone_number,start_time,end_time,message_count,status,intent,satisfaction,converted,metadata
 streamlit_248e2c44,8bcc3cac-daf7-4a07-8397-2bb96c0dff43,default,streamlit,,2025-09-05T15:01:19.047361,,19,active,,,False,
+streamlit_ff456e79,50fcc04b-2222-4105-a378-f3c581260715,default,streamlit,,2025-09-07T16:43:07.780302,,10,active,,,False,
+streamlit_34a4ebdb,5bae5ff7-1734-4525-9fa6-9c93229a5b4e,default,streamlit,,2025-09-07T17:13:23.087876,,19,active,,,False,
+streamlit_6c8714ce,d4b74dc0-8f16-46a8-a0fa-2fb0ad465bad,default,streamlit,,2025-09-07T17:23:02.966818,,5,active,,,False,
+streamlit_e7c8d62e,f5fdc180-3168-4742-bda2-1b50d3c3891d,default,streamlit,,2025-09-07T17:35:56.870607,,13,active,,,False,
