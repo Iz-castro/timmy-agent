@@ -1,0 +1,118 @@
+{
+  "business_info": {
+    "name": "Timmy - Atendente Virtual",
+    "description": "Atendimento inteligente, curto e direto, feito para pequenos e médios negócios",
+    "value_proposition": "Automatize WhatsApp e Web com IA, regras de negócio, handoff humano e relatórios simples",
+    "target_audience": "PMEs (pequenas e médias empresas)",
+    "differentials": [
+      "Substitui parte do atendimento humano",
+      "Previsibilidade de custos",
+      "Foco em conversão",
+      "Respostas curtas e objetivas (sem emojis)"
+    ]
+  },
+  
+  "plans": {
+    "essencial": {
+      "price": "R$ 750/mês",
+      "conversations": "Até 300 conversas inclusas",
+      "features": [
+        "WhatsApp ou Web",
+        "Chat/CRM próprio", 
+        "Handoff humano",
+        "Excedente: R$ 0,20/conversa"
+      ],
+      "ideal_for": "Início rápido em clínicas e comércios locais"
+    },
+    "profissional": {
+      "price": "R$ 1.400/mês",
+      "conversations": "Até 1.000 conversas inclusas",
+      "features": [
+        "Relatórios mensais",
+        "Regras personalizadas", 
+        "Integrações básicas",
+        "Excedente: R$ 0,20/conversa"
+      ],
+      "ideal_for": "PMEs em crescimento com mais volume",
+      "recommended": true
+    },
+    "premium": {
+      "price": "R$ 2.000/mês",
+      "conversations": "Conversas ilimitadas",
+      "features": [
+        "Multiagente (WhatsApp + Web/Instagram)",
+        "Dashboards de qualidade",
+        "Suporte prioritário"
+      ],
+      "ideal_for": "Previsibilidade total"
+    },
+    "enterprise": {
+      "price": "R$ 3.500+/mês",
+      "conversations": "Ilimitadas",
+      "features": [
+        "Inclui tudo do Premium",
+        "Persona sob medida",
+        "Integração com ERP/agenda",
+        "Relatórios de ciência de dados", 
+        "Consultoria mensal"
+      ],
+      "ideal_for": "Integrações profundas e dados avançados"
+    }
+  },
+  
+  "features": {
+    "ia_conhecimento": "Respostas curtas, contexto do cliente e políticas sob medida",
+    "handoff_confiavel": "Coleta nome, plano e especialidade antes de transferir",
+    "relatorios": "Volume, horários de pico e taxa de handoff",
+    "whatsapp_integration": "Integração WhatsApp Cloud API da Meta",
+    "no_emojis": "Padrão profissional sem emojis",
+    "multi_tenant": "Suporte a múltiplos clientes isolados"
+  },
+  
+  "integrations": {
+    "whatsapp": "Meta WhatsApp Cloud API (direto da Meta)",
+    "doctoralia": "Fluxo de link direto e integrações avançadas",
+    "agenda": "Integração com sistemas de agendamento",
+    "erp": "Disponível nos planos superiores",
+    "crm": "CRM próprio incluído"
+  },
+  
+  "contact": {
+    "sales_approach": "Solicitar proposta personalizada",
+    "demo_available": true,
+    "implementation_time": "Setup rápido",
+    "support": "Suporte técnico incluído"
+  },
+  
+  "faq": [
+    {
+      "question": "Como funciona a cobrança?",
+      "answer": "Preços mensais fixos com conversas inclusas. Excedente cobrado por conversa nos planos Essencial e Profissional."
+    },
+    {
+      "question": "Posso integrar com WhatsApp?",
+      "answer": "Sim, operamos direto na Meta Cloud API. Custos variáveis podem ser repassados conforme plano."
+    },
+    {
+      "question": "O Timmy substitui atendentes?",
+      "answer": "Reduz carga e qualifica conversas. Handoff é parte do fluxo para casos complexos."
+    },
+    {
+      "question": "Como são os relatórios?",
+      "answer": "Volume, horários de pico, taxa de handoff. Dashboards no Premium e customizados no Enterprise."
+    },
+    {
+      "question": "Posso personalizar as respostas?",
+      "answer": "Sim, cada cliente tem suas próprias regras, conhecimento e personalidade configuráveis."
+    }
+  ],
+  
+  "competitive_advantages": [
+    "Foco em PMEs (não enterprise)",
+    "Preços transparentes e previsíveis", 
+    "Setup rápido comparado a soluções complexas",
+    "Handoff inteligente (não apenas chatbot)",
+    "Respostas profissionais (sem emojis)",
+    "Multi-tenant nativo"
+  ]
+}

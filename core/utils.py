@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Core Utils - Versão com micro-responses inteligentes
+Core Utils - Versão com micro-responses inteligentes + format_structured_response
 """
 
 import os
@@ -62,13 +62,77 @@ def list_sessions() -> List[str]:
 
 
 # =============================================================================
+# STRUCTURED RESPONSE FORMATTER - NOVO PADRÃO UNIVERSAL
+# =============================================================================
+
+def format_structured_response(
+    intro_text: str,
+    items: List[Dict[str, str]], 
+    outro_text: str,
+    session_key: str = None
+) -> List[str]:
+    """
+    Formata resposta estruturada em 3 fases garantindo formatação correta:
+    1. Introdução (pode ser quebrada se muito longa, mas respeitando sentenças)
+    2. Cada item = 1 mensagem COMPLETA (nunca quebrada)
+    3. Fechamento (pode ser quebrada se muito longa, mas respeitando sentenças)
+    
+    Args:
+        intro_text: "Claro! Aqui estão os planos disponíveis:"
+        items: [
+            {"number": "1", "title": "Essencial", "details": "R$ 750/mês - Até 300 conversas..."},
+            {"title": "Dr. João Silva", "details": "CRM 12345, especialista em..."}
+        ]
+        outro_text: "Se precisar de mais detalhes, é só avisar!"
+        session_key: Para micro_responses da intro/outro
+    
+    Returns:
+        Lista de mensagens prontas para envio
+    """
+    responses = []
+    
+    print(f"[DEBUG] format_structured_response: {len(items)} itens")
+    
+    # Fase 1: Introdução (pode ser quebrada se muito longa, mas respeitando sentenças)
+    if intro_text and intro_text.strip():
+        intro_parts = micro_responses(intro_text, min_chars=120, max_chars=200, session_key=session_key)
+        responses.extend(intro_parts)
+        print(f"[DEBUG] Introdução quebrada em {len(intro_parts)} partes")
+    
+    # Fase 2: Cada item = 1 mensagem COMPLETA (nunca quebrada)
+    for i, item in enumerate(items, 1):
+        if "number" in item and "title" in item:
+            # Formato numerado: "1. **Título**: Detalhes"
+            formatted_item = f"{item['number']}. **{item['title']}**: {item['details']}"
+        elif "title" in item:
+            # Formato com título: "**Título**: Detalhes"  
+            formatted_item = f"**{item['title']}**: {item['details']}"
+        else:
+            # Formato simples: apenas detalhes
+            formatted_item = item.get('details', str(item))
+        
+        # CRÍTICO: Adiciona como mensagem única, sem quebrar
+        responses.append(formatted_item)
+        print(f"[DEBUG] Item {i}: {len(formatted_item)} chars - '{formatted_item[:50]}...'")
+    
+    # Fase 3: Fechamento (pode ser quebrada se muito longa, mas respeitando sentenças)
+    if outro_text and outro_text.strip():
+        outro_parts = micro_responses(outro_text, min_chars=120, max_chars=200, session_key=session_key)
+        responses.extend(outro_parts)
+        print(f"[DEBUG] Fechamento quebrado em {len(outro_parts)} partes")
+    
+    print(f"[DEBUG] Total: {len(responses)} mensagens")
+    return responses
+
+
+# =============================================================================
 # MICRO-RESPONSES INTELIGENTES
 # =============================================================================
 
 def micro_responses(
     text: str, 
-    min_chars: int = 80, 
-    max_chars: int = 120,
+    min_chars: int = 120, 
+    max_chars: int = 200,
     session_key: Optional[str] = None
 ) -> List[str]:
     """
@@ -79,7 +143,7 @@ def micro_responses(
     2. Pausas naturais (vírgulas, dois pontos)
     3. Conjunções (e, mas, porém, então)
     4. Espaços em branco
-    5. Como último recurso: caracteres
+    5. NUNCA quebra por caracteres - preserva integridade das palavras
     """
     if not text or not text.strip():
         return [""]
@@ -145,13 +209,68 @@ def _intelligent_sentence_break(text: str, min_chars: int, max_chars: int) -> Li
     """
     Quebra inteligente de uma sentença longa
     
+    PRIORIDADE ABSOLUTA: NUNCA quebrar no meio de uma sentença
+    
     Ordem de prioridade para quebra:
-    1. Pausas naturais (, : ; )
-    2. Conjunções (e, mas, porém, então, porque)
-    3. Espaços entre palavras
-    4. Caracteres (último recurso)
+    1. Sentenças completas (. ! ?) - PRIORIDADE MÁXIMA
+    2. Pausas naturais (, : ; )
+    3. Conjunções (e, mas, porém, então, porque)
+    4. Espaços entre palavras
+    5. Caracteres (último recurso - mas ainda respeitando palavras)
     """
     print(f"[DEBUG] Quebra inteligente para: '{text}' (len={len(text)})")
+    
+    if len(text) <= max_chars:
+        return [text]
+    
+    # 🔥 PRIORIDADE 1: Quebra por sentenças completas PRIMEIRO
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    if len(sentences) > 1:
+        print(f"[DEBUG] Detectadas {len(sentences)} sentenças - priorizando quebra por sentença")
+        
+        responses = []
+        current = ""
+        
+        for sentence in sentences:
+            # Se sentença individual é muito grande, quebra ela por pausas naturais
+            if len(sentence) > max_chars:
+                if current:
+                    responses.append(current.strip())
+                    current = ""
+                
+                # Quebra apenas por pausas naturais, nunca no meio de frase
+                sub_responses = _break_by_natural_pauses_only(sentence, max_chars)
+                responses.extend(sub_responses)
+                continue
+            
+            # Testa se pode adicionar a sentença ao bloco atual
+            test_text = (current + " " + sentence).strip() if current else sentence
+            
+            if len(test_text) <= max_chars:
+                current = test_text
+            else:
+                # Não cabe, finaliza bloco atual e inicia novo
+                if current:
+                    responses.append(current.strip())
+                current = sentence
+        
+        # Adiciona último bloco
+        if current:
+            responses.append(current.strip())
+        
+        if responses:
+            print(f"[DEBUG] Quebra por sentenças resultou em: {responses}")
+            return responses
+    
+    # Se não há sentenças múltiplas, tenta pausas naturais
+    return _break_by_natural_pauses_only(text, max_chars)
+
+
+def _break_by_natural_pauses_only(text: str, max_chars: int) -> List[str]:
+    """
+    Quebra APENAS por pausas naturais, preservando integridade das frases
+    """
+    print(f"[DEBUG] Quebra por pausas naturais para: '{text[:50]}...'")
     
     if len(text) <= max_chars:
         return [text]
@@ -162,47 +281,53 @@ def _intelligent_sentence_break(text: str, min_chars: int, max_chars: int) -> Li
         pause_points.append(match.end())
     
     if pause_points:
-        print(f"[DEBUG] Pontos de pausa encontrados: {pause_points}")
-        best_break = _find_best_break_point(text, pause_points, min_chars, max_chars)
+        # Encontra o melhor ponto de pausa dentro dos limites
+        best_break = None
+        for point in pause_points:
+            if point <= max_chars:
+                best_break = point
+        
         if best_break:
             part1 = text[:best_break].strip()
             part2 = text[best_break:].strip()
-            print(f"[DEBUG] Quebra por pausa: '{part1}' | '{part2}'")
+            print(f"[DEBUG] Quebra por pausa: '{part1}' | '{part2[:30]}...'")
             
-            # Recursivamente quebra as partes se necessário
             result = []
-            result.extend(_intelligent_sentence_break(part1, min_chars, max_chars))
-            result.extend(_intelligent_sentence_break(part2, min_chars, max_chars))
+            result.extend(_break_by_natural_pauses_only(part1, max_chars))
+            result.extend(_break_by_natural_pauses_only(part2, max_chars))
             return result
     
-    # 2. Tenta quebrar por conjunções
+    # 2. Se não achou pausas, tenta conjunções
     conjunction_points = []
-    conjunctions = ['\\se\\s', '\\smas\\s', '\\sporém\\s', '\\sentão\\s', '\\sque\\s', '\\sonde\\s', '\\scomo\\s']
+    conjunctions = ['\\se\\s', '\\smas\\s', '\\sporém\\s', '\\sentão\\s', '\\sque\\s']
     
     for conj in conjunctions:
         for match in re.finditer(conj, text, re.IGNORECASE):
             conjunction_points.append(match.start())
     
     if conjunction_points:
-        print(f"[DEBUG] Pontos de conjunção encontrados: {conjunction_points}")
-        best_break = _find_best_break_point(text, conjunction_points, min_chars, max_chars)
+        best_break = None
+        for point in conjunction_points:
+            if point <= max_chars:
+                best_break = point
+        
         if best_break:
             part1 = text[:best_break].strip()
             part2 = text[best_break:].strip()
-            print(f"[DEBUG] Quebra por conjunção: '{part1}' | '{part2}'")
             
             result = []
-            result.extend(_intelligent_sentence_break(part1, min_chars, max_chars))
-            result.extend(_intelligent_sentence_break(part2, min_chars, max_chars))
+            result.extend(_break_by_natural_pauses_only(part1, max_chars))
+            result.extend(_break_by_natural_pauses_only(part2, max_chars))
             return result
     
-    # 3. Quebra por espaços (palavras completas)
+    # 3. Como último recurso: quebra por palavras COMPLETAS
     words = text.split()
     if len(words) <= 1:
-        # Texto é uma palavra única muito longa - quebra por caracteres
-        return _break_by_characters(text, max_chars)
+        # Texto é uma palavra única muito longa - retorna como está
+        print(f"[DEBUG] Palavra única muito longa, mantendo intacta")
+        return [text]
     
-    print(f"[DEBUG] Quebrando por palavras ({len(words)} palavras)")
+    print(f"[DEBUG] Quebra por palavras completas ({len(words)} palavras)")
     
     responses = []
     current = ""
@@ -215,18 +340,15 @@ def _intelligent_sentence_break(text: str, min_chars: int, max_chars: int) -> Li
         else:
             # Não cabe mais, finaliza bloco atual
             if current:
-                responses.append(current)
+                responses.append(current.strip())
                 current = word
             else:
-                # Palavra individual é muito grande
-                if len(word) > max_chars:
-                    responses.extend(_break_by_characters(word, max_chars))
-                else:
-                    current = word
+                # Palavra individual é muito grande - mantém como está
+                responses.append(word)
     
     # Adiciona último bloco
     if current:
-        responses.append(current)
+        responses.append(current.strip())
     
     print(f"[DEBUG] Quebra por palavras resultou em: {responses}")
     return responses if responses else [text]
@@ -253,41 +375,8 @@ def _find_best_break_point(text: str, break_points: List[int], min_chars: int, m
     return best_point
 
 
-def _break_by_characters(text: str, max_chars: int) -> List[str]:
-    """
-    Quebra por caracteres como último recurso
-    """
-    print(f"[DEBUG] Quebra por caracteres (último recurso) para: '{text}'")
-    
-    responses = []
-    start = 0
-    
-    while start < len(text):
-        end = start + max_chars
-        if end >= len(text):
-            responses.append(text[start:])
-            break
-        
-        # Tenta não quebrar no meio de uma palavra
-        if text[end] != ' ' and end < len(text) - 1:
-            # Procura espaço anterior
-            space_pos = text.rfind(' ', start, end)
-            if space_pos > start + (max_chars // 2):  # Se espaço não está muito no início
-                end = space_pos
-        
-        responses.append(text[start:end].strip())
-        start = end
-        
-        # Pula espaços
-        while start < len(text) and text[start] == ' ':
-            start += 1
-    
-    print(f"[DEBUG] Quebra por caracteres resultou em: {responses}")
-    return responses
-
-
 # =============================================================================
-# KNOWLEDGE LOADING (mantém como estava)
+# KNOWLEDGE LOADING
 # =============================================================================
 
 def load_knowledge_data(tenant_id: str = "default") -> Dict[str, Any]:
@@ -354,7 +443,7 @@ def reload_knowledge(tenant_id: str = "default") -> Dict[str, Any]:
 
 
 # =============================================================================
-# INFORMATION EXTRACTION (mantém como estava)
+# INFORMATION EXTRACTION
 # =============================================================================
 
 def extract_info_from_text(text: str) -> Dict[str, str]:
@@ -397,24 +486,26 @@ def extract_info_from_text(text: str) -> Dict[str, str]:
                 info['phone'] = phone_match.group()
                 break
     
-    # Empresa
-    company_patterns = [
+    # Empresa/Negócio - MELHORADO
+    business_patterns = [
         r"(?:trabalho na|trabalho no|empresa|companhia)\s+([A-Za-zÀ-ÿ\s&]{2,30})",
         r"(?:sou da|venho da)\s+([A-Za-zÀ-ÿ\s&]{2,30})",
+        r"(?:tenho|possuo)\s+(?:uma|um)?\s*([A-Za-zÀ-ÿ\s]{2,30})",
+        r"(?:minha|meu)\s+([A-Za-zÀ-ÿ\s]{2,30})",
         r"([A-Za-zÀ-ÿ\s&]{2,30})\s+(?:ltda|sa|s\.a\.|me|mei|eireli)"
     ]
     
-    for pattern in company_patterns:
+    for pattern in business_patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             company = match.group(1).strip()
-            if len(company) >= 2:
+            if len(company) >= 2 and not any(word in company.lower() for word in ['casa', 'vida', 'família']):
                 info['company'] = company
                 break
     
-    # Cargo
+    # Cargo/Profissão - MELHORADO
     job_patterns = [
-        r"(?:sou|trabalho como|atuo como|profissão)\s+([A-Za-zÀ-ÿ\s]{2,30})",
+        r"(?:sou|trabalho como|atuo como|profissão|minha profissão é)\s+([A-Za-zÀ-ÿ\s]{2,30})",
         r"(?:cargo|função|posição)\s+(?:de|é)\s+([A-Za-zÀ-ÿ\s]{2,30})"
     ]
     
@@ -519,8 +610,7 @@ def get_system_stats() -> Dict[str, Any]:
         "cached_tenants": len(_KNOWLEDGE_CACHE),
         "session_keys": list(_SESSIONS.keys())
     }
-    
-# ADICIONAR ao final do core/utils.py
+
 
 def load_tenant_workflow(tenant_id: str):
     """Carrega workflow customizado do tenant"""
@@ -551,9 +641,6 @@ def load_tenant_workflow(tenant_id: str):
             workflow = MedicalWorkflow(tenant_id, config)
             print(f"[DEBUG] Workflow medical_base carregado com sucesso!")
             return workflow
-        # elif workflow_type == "commerce_base":
-        #     from core.workflows.commerce_base import CommerceWorkflow
-        #     return CommerceWorkflow(tenant_id, config)
         
         print(f"[DEBUG] Tipo de workflow '{workflow_type}' não implementado")
         return None

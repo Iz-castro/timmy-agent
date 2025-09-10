@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Core Agent - Com sistema de releitura completa da conversa
+Core Agent - Com sistema de releitura completa da conversa + formatação estruturada automática
 """
 
 import json
 import uuid
 import traceback
+import re
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from dataclasses import dataclass
@@ -13,14 +14,14 @@ from datetime import datetime
 
 from core.utils import (
     micro_responses, load_knowledge_data, get_state, set_state, 
-    mark_once, chat_complete, extract_info_from_text
+    mark_once, chat_complete, extract_info_from_text, 
+    format_structured_response, load_tenant_workflow
 )
 
 from core.persistence import (
     UserInfo, SessionInfo, ConversationMessage,
     persistence_manager, get_or_create_user_by_phone, save_message
 )
-from core.utils import load_tenant_workflow
 
 @dataclass
 class Message:
@@ -132,7 +133,6 @@ ANÁLISE PARA PRÓXIMA RESPOSTA:
                 for pattern in patterns:
                     if pattern in content:
                         # Extração simples do nome
-                        import re
                         match = re.search(f"{pattern}\\s+([A-Za-zÀ-ÿ]+)", content, re.IGNORECASE)
                         if match:
                             return match.group(1)
@@ -176,6 +176,122 @@ class TimmyAgent:
     def __init__(self, tenant_id: str = "default"):
         self.tenant_id = tenant_id
         self.knowledge = load_knowledge_data(tenant_id)
+    
+    def _detect_and_format_structured_content(self, response_text: str, session_key: str) -> List[str]:
+        """
+        Detecta se a resposta contém conteúdo estruturado e aplica formatação adequada
+        """
+        print(f"[DEBUG] Analisando resposta para formatação estruturada...")
+        
+        # Padrões que indicam conteúdo estruturado
+        structured_patterns = [
+            r'\d+\.\s*\*\*.*?\*\*:',  # "1. **Título**:"
+            r'\d+\.\s*[A-Z][^:]*:',   # "1. Título:"
+            r'\*\*[^*]+\*\*:',        # "**Título**:"
+            r'(?:\d+\.\s*){2,}',      # Múltiplos itens numerados
+        ]
+        
+        # Verifica se contém padrões estruturados
+        has_structured_content = any(
+            re.search(pattern, response_text, re.MULTILINE | re.IGNORECASE) 
+            for pattern in structured_patterns
+        )
+        
+        if not has_structured_content:
+            print(f"[DEBUG] Conteúdo não estruturado - usando micro_responses")
+            return micro_responses(response_text, session_key=session_key)
+        
+        print(f"[DEBUG] Conteúdo estruturado detectado - aplicando format_structured_response")
+        
+        # Extrai introdução, itens e fechamento
+        lines = response_text.strip().split('\n')
+        intro_lines = []
+        items = []
+        outro_lines = []
+        current_section = "intro"
+        current_item = {}
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Detecta início de item numerado ou com título
+            item_match = re.match(r'^(\d+)\.\s*\*\*([^*]+)\*\*:\s*(.*)', line)
+            simple_item_match = re.match(r'^(\d+)\.\s*([^:]+):\s*(.*)', line)
+            title_match = re.match(r'^\*\*([^*]+)\*\*:\s*(.*)', line)
+            
+            if item_match:
+                # Salva item anterior se existir
+                if current_item:
+                    items.append(current_item)
+                
+                current_section = "items"
+                current_item = {
+                    "number": item_match.group(1),
+                    "title": item_match.group(2).strip(),
+                    "details": item_match.group(3).strip()
+                }
+                
+            elif simple_item_match:
+                if current_item:
+                    items.append(current_item)
+                    
+                current_section = "items"
+                current_item = {
+                    "number": simple_item_match.group(1),
+                    "title": simple_item_match.group(2).strip(),
+                    "details": simple_item_match.group(3).strip()
+                }
+                
+            elif title_match:
+                if current_item:
+                    items.append(current_item)
+                    
+                current_section = "items"
+                current_item = {
+                    "title": title_match.group(1).strip(),
+                    "details": title_match.group(2).strip()
+                }
+                
+            else:
+                # Linha de continuação ou outro conteúdo
+                if current_section == "intro" and not items:
+                    intro_lines.append(line)
+                elif current_section == "items" and current_item:
+                    # Adiciona à descrição do item atual
+                    if current_item.get("details"):
+                        current_item["details"] += " " + line
+                    else:
+                        current_item["details"] = line
+                elif items:  # Já temos itens, então é fechamento
+                    current_section = "outro"
+                    outro_lines.append(line)
+                else:
+                    intro_lines.append(line)
+        
+        # Adiciona último item se existir
+        if current_item:
+            items.append(current_item)
+        
+        # Monta textos das seções
+        intro_text = " ".join(intro_lines) if intro_lines else ""
+        outro_text = " ".join(outro_lines) if outro_lines else ""
+        
+        # Aplica formatação padrão se não houver introdução/fechamento adequados
+        if not intro_text and items:
+            if any("plano" in str(item).lower() for item in items):
+                intro_text = "Claro! Aqui estão os planos disponíveis:"
+                outro_text = "Se precisar de mais detalhes sobre algum plano, é só avisar!"
+            elif any("médico" in str(item).lower() or "doutor" in str(item).lower() for item in items):
+                intro_text = "Nossa equipe médica tem excelentes profissionais:"
+                outro_text = "Posso ajudar com agendamento ou mais informações sobre algum médico específico?"
+            else:
+                intro_text = "Aqui estão as informações:"
+                outro_text = "Precisa de mais alguma coisa?"
+        
+        # Usa format_structured_response
+        return format_structured_response(intro_text, items, outro_text, session_key)
         
     def _build_system_prompt_with_full_context(self, conversation_context: str) -> str:
         """Constrói prompt do sistema com contexto completo da conversa"""
@@ -409,7 +525,7 @@ REGRAS DE RESPOSTA:
             print(f"[ERROR] Erro em _save_message: {e}")
             print(f"[ERROR] Traceback: {traceback.format_exc()}")
     
-    def _generate_contextual_response(self, message: Message, conversation_context: str) -> str:
+    def _generate_contextual_response(self, message: Message, conversation_context: str) -> List[str]:
         """Gera resposta com base no contexto completo da conversa"""
         
         try:
@@ -422,19 +538,24 @@ Responda de forma natural, consistente com a conversa e demonstrando que você a
             
             system_prompt = self._build_system_prompt_with_full_context(conversation_context)
             
-            response = chat_complete(
+            response_text = chat_complete(
                 system_prompt=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
-                max_tokens=200,
+                max_tokens=400,  # Aumentado para permitir listas mais longas
                 temperature=0.7
             )
             
-            return response.strip()
+            # 🔥 NOVA LÓGICA: Detecta e formata conteúdo estruturado automaticamente
+            formatted_responses = self._detect_and_format_structured_content(
+                response_text.strip(), 
+                message.session_key
+            )
+            
+            return formatted_responses
             
         except Exception as e:
             print(f"[ERROR] Erro em _generate_contextual_response: {e}")
-            return "Desculpe, tive um problema técnico. Pode tentar novamente?"
-
+            return ["Desculpe, tive um problema técnico. Pode tentar novamente?"]
 
 
 def handle_turn(tenant_id: str, message: Message) -> List[str]:
@@ -480,8 +601,25 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
                 agent._save_message(message.session_key, "assistant", response, "greeting")
             return first_interaction
         
-        # 🔥 PASSO 5.5: Verifica se há workflow customizado
-        print(f"[DEBUG] PASSO 5.5: Verificando workflow customizado...")
+        # 🔥 PASSO 5.5: Verifica se há estratégia consultiva ANTES do workflow
+        print(f"[DEBUG] PASSO 5.5: Verificando estratégia consultiva...")
+        
+        try:
+            from core.conversation_strategy import process_consultative_turn
+            consultative_response = process_consultative_turn(tenant_id, message.text, message.session_key)
+            
+            if consultative_response:
+                print(f"[DEBUG] Estratégia consultiva ativa: '{consultative_response}'")
+                responses = micro_responses(consultative_response, min_chars=120, max_chars=200, session_key=message.session_key)
+                for response in responses:
+                    agent._save_message(message.session_key, "assistant", response, "consultative")
+                print(f"[DEBUG] ===== handle_turn CONCLUÍDO (CONSULTIVO) =====\n")
+                return responses
+        except Exception as e:
+            print(f"[DEBUG] Erro na estratégia consultiva: {e}")
+        
+        # 🔥 PASSO 5.6: Verifica se há workflow customizado
+        print(f"[DEBUG] PASSO 5.6: Verificando workflow customizado...")
         workflow = load_tenant_workflow(tenant_id)
         
         if workflow and hasattr(workflow, 'process_message'):
@@ -510,16 +648,11 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
             
         # PASSO 7: Gera resposta com contexto completo (fluxo padrão)
         print(f"[DEBUG] PASSO 7: Gerando resposta contextual...")
-        response_text = agent._generate_contextual_response(message, conversation_context)
-        print(f"[DEBUG] Resposta gerada: '{response_text}'")
+        responses = agent._generate_contextual_response(message, conversation_context)
+        print(f"[DEBUG] Respostas geradas: {responses}")
         
-        # PASSO 8: Quebra em micro-respostas inteligentes
-        print(f"[DEBUG] PASSO 8: Quebrando em micro-respostas...")
-        responses = micro_responses(response_text, session_key=message.session_key)
-        print(f"[DEBUG] Micro-responses: {responses}")
-        
-        # PASSO 9: Salva respostas do assistente
-        print(f"[DEBUG] PASSO 9: Salvando respostas...")
+        # PASSO 8: Salva respostas do assistente
+        print(f"[DEBUG] PASSO 8: Salvando respostas...")
         for response in responses:
             agent._save_message(message.session_key, "assistant", response, intent)
             
@@ -531,6 +664,10 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
         print(f"[ERROR DEBUG] Traceback completo:")
         print(traceback.format_exc())
         return [f"Erro interno: {str(e)}"]
+
+
+def process_message(text: str, tenant_id: str = "default", phone_number: str = None, session_key: str = None) -> List[str]:
+    """Função de conveniência para processar mensagem"""
     
     try:
         if not session_key:
