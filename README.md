@@ -1,341 +1,420 @@
-# 🤖 Timmy-IA v2.0 - Assistente Conversacional Multi-Tenant
+# 🤖 Timmy-IA - Assistente Conversacional Multi-Tenant
 
-Assistente virtual inteligente com memória conversacional perfeita, organizado por tenant com arquivos separados por conversa.
+> Plataforma de assistentes virtuais inteligentes com memória conversacional completa e estrutura organizada por cliente/tenant.
 
-## 🚀 Funcionalidades Principais
+## 🚀 **Visão Geral**
 
-- **🧠 Memória Conversacional Completa**: Relê toda a conversa antes de cada resposta
-- **🏢 Multi-Tenant**: Suporte completo a múltiplos clientes com dados isolados
-- **📁 Arquivo por Conversa**: Cada sessão gera um CSV separado para melhor performance
-- **💬 Micro-responses Inteligentes**: Quebra semântica que preserva o sentido
-- **📝 Coleta Automática**: Extrai informações como nome, email e telefone
-- **🧠 Base de Conhecimento**: Responde com base em dados configuráveis por tenant
-- **📱 Interface Web**: Interface Streamlit com estatísticas por tenant
+O Timmy-IA é uma plataforma robusta para criação de assistentes conversacionais personalizados, com foco em:
 
-## 📁 Nova Estrutura Organizada
+- **🧠 Memória Conversacional Perfeita**: Relê toda a conversa antes de cada resposta
+- **🏢 Arquitetura Multi-Tenant**: Dados completamente isolados por cliente
+- **📁 Organização Inteligente**: Um arquivo CSV por conversa para máxima performance
+- **💬 Micro-Responses**: Quebra semântica que preserva o sentido das mensagens
+- **🔧 Workflows Customizáveis**: Suporte a fluxos específicos por tenant (médico, vendas, etc.)
+
+---
+
+## 📋 **Funcionalidades Principais**
+
+### **🧠 Sistema de Memória Avançado**
+- **Releitura Completa**: Analisa todo o histórico antes de responder
+- **Contexto Preservado**: Nunca repete saudações ou perde informações
+- **Coleta Passiva**: Extrai nome, email, telefone automaticamente
+- **Persistência Estruturada**: Dados organizados por tenant com CSV por conversa
+
+### **🏢 Multi-Tenant Nativo**
+- **Isolamento Total**: Cada cliente tem seus próprios dados e configurações
+- **Personalização Completa**: Persona, conhecimento e regras por tenant
+- **Escalabilidade**: Adicione novos clientes sem afetar os existentes
+
+### **📱 Interfaces Disponíveis**
+- **Streamlit**: Interface web completa com dashboard
+- **API REST**: Endpoints para integração externa
+- **WhatsApp**: Suporte via Meta Cloud API (em desenvolvimento)
+
+---
+
+## 🏗️ **Arquitetura do Projeto**
 
 ```
 timmy_IA/
-├── app.py                      # Interface Streamlit atualizada
-├── .env                        # Configurações (copie de .env.example)
-├── requirements.txt            # Dependências Python
+├── 📱 app.py                    # Interface Streamlit principal
+├── ⚙️ .env                      # Configurações (copie de .env.example)
+├── 📦 requirements.txt          # Dependências Python
 │
-├── core/
-│   ├── agent.py               # Sistema de releitura completa + multi-tenant
-│   ├── utils.py               # Micro-responses inteligentes
-│   └── persistence.py         # Estrutura de dados por tenant
+├── 🧠 core/                     # Motor principal
+│   ├── agent.py                # Sistema de releitura completa + AI
+│   ├── utils.py                # Micro-responses e utilitários
+│   ├── persistence.py          # Estrutura de dados por tenant
+│   ├── conversation_strategy.py # Estratégias consultivas
+│   ├── database/              # Sistema de banco por tenant
+│   │   ├── __init__.py        # Inicialização do módulo
+│   │   ├── connection.py      # Conexões SQLite por tenant
+│   │   └── models.py          # Modelos SQLAlchemy
+│   └── workflows/             # Workflows customizados
+│       └── medical_base.py    # Template médico com banco
 │
-├── data/                      # 🔒 Dados organizados por tenant
-│   ├── default/              # Tenant padrão
-│   │   ├── conversations/    # Um CSV por conversa
-│   │   │   ├── conversation_streamlit_abc123.csv
-│   │   │   └── conversation_phone_5511999999.csv
-│   │   ├── sessions/         # Sessões do tenant
-│   │   │   └── sessions.csv
-│   │   └── users/           # Usuários do tenant
-│   │       └── users.csv
-│   ├── varizemed/           # Exemplo: tenant clínica médica
-│   └── comercio_exemplo/    # Exemplo: tenant comércio
+├── 🗄️ data/                     # Dados organizados por tenant
+│   ├── default/                # Tenant padrão
+│   │   ├── conversations/      # Um CSV por conversa
+│   │   ├── sessions/          # Sessões do tenant
+│   │   └── users/             # Usuários do tenant
+│   └── varizemed/             # Exemplo: tenant clínica
 │
-└── tenants/                  # Configurações por cliente
-    ├── default/
-    │   ├── config.json      # Configurações gerais
-    │   ├── knowledge.json   # Base de conhecimento
-    │   └── examples.jsonl   # Exemplos de conversa
-    ├── varizemed/           # Configuração da clínica
-    └── comercio_exemplo/    # Configuração do comércio
+├── 🏢 tenants/                  # Configurações por cliente
+│   ├── default/               # Configuração padrão
+│   │   ├── config.json        # Configurações gerais
+│   │   ├── knowledge.json     # Base de conhecimento
+│   │   └── examples.jsonl     # Exemplos de conversa
+│   └── timmy_vendas/          # Vendas do próprio Timmy
+│       ├── config.json        # Configurações comerciais
+│       ├── knowledge.json     # Planos e produtos
+│       └── examples.jsonl     # Estratégias de venda
+│
+└── 🔌 apps/                     # Interfaces (futuro)
+    ├── api.py                 # FastAPI completa
+    └── webhook.py             # Integrações WhatsApp/Telegram
 ```
 
-## ⚡ Instalação Rápida
+---
 
-### 1. **Clone e configure o ambiente:**
+## ⚡ **Instalação Rápida**
+
+### **1. Preparação do Ambiente**
 ```bash
-# Clone o projeto
-git clone https://github.com/Iz-castro/timmy-agent
-cd timmy-agent
+# Clone o repositório
+git clone https://github.com/seu-usuario/timmy-ia
+cd timmy-ia
 
-# Crie ambiente virtual (recomendado)
+# Crie ambiente virtual
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # ou
 venv\Scripts\activate     # Windows
-```
 
-### 2. **Instale as dependências:**
-```bash
+# Instale dependências
 pip install -r requirements.txt
 ```
 
-### 3. **Configure as variáveis de ambiente:**
+### **2. Configuração**
 ```bash
 # Copie o arquivo de exemplo
 cp .env.example .env
 
-# Edite o .env e adicione sua chave da OpenAI
+# Edite o .env e adicione sua chave OpenAI
 # OPENAI_API_KEY=sk-proj-sua_chave_aqui
-# TIMMY_MODEL=gpt-4o-mini  # Modelo econômico (padrão)
+# TIMMY_MODEL=gpt-4o-mini  # Modelo econômico
 ```
 
-### 4. **Execute a aplicação:**
+### **3. Execução**
 ```bash
+# Execute a aplicação
 streamlit run app.py
+
+# Acesse: http://localhost:8501
 ```
 
-A aplicação estará disponível em: `http://localhost:8501`
+---
 
-## 🏢 Sistema Multi-Tenant
+## 💼 **Exemplo: Tenant Vendas**
 
-### **Criando um Novo Tenant**
+### **Estratégia Consultiva**
+O Timmy inclui um sistema de vendas consultivas que:
 
-```python
-from core.utils import create_tenant_structure
+1. **Descobre o Negócio**: "Que tipo de negócio você tem?"
+2. **Entende as Dores**: "Quanto tempo gasta com perguntas repetitivas?"
+3. **Posiciona a Solução**: Recomenda plano baseado no perfil
+4. **Gera Proposta**: Personalizada conforme necessidades
 
-# Cria estrutura completa para novo cliente
-create_tenant_structure("minha_clinica")
-```
-
-Isso criará:
-- `tenants/minha_clinica/` - Configurações
-- `data/minha_clinica/` - Dados (criado automaticamente no primeiro uso)
-
-### **Configuração do Tenant**
-
-#### **`tenants/minha_clinica/config.json`**
+### **Planos Configuráveis**
 ```json
 {
-  "agent_name": "Dr. Assistant",
-  "business_name": "Clínica Exemplo",
-  "language": "pt-BR",
-  "timezone": "America/Sao_Paulo",
-  "personality": {
-    "tone": "profissional e acolhedor",
-    "style": "empático e cuidadoso",
-    "emoji_usage": false
+  "essencial": {
+    "price": "R$ 750/mês",
+    "conversations": "300 inclusas",
+    "ideal_for": "Clínicas e comércios locais"
+  },
+  "profissional": {
+    "price": "R$ 1.400/mês", 
+    "conversations": "1.000 inclusas",
+    "recommended": true
   }
 }
 ```
 
-#### **`tenants/minha_clinica/knowledge.json`**
+---
+
+## 🔧 **Criando Novo Tenant**
+
+### **Via Código**
+```python
+from core.utils import create_tenant_structure
+
+# Cria estrutura completa
+create_tenant_structure("minha_empresa")
+```
+
+### **Estrutura Criada**
+```
+tenants/minha_empresa/
+├── config.json        # Configurações básicas
+├── knowledge.json     # Base de conhecimento
+└── examples.jsonl     # Exemplos de conversa
+
+data/minha_empresa/     # Criado automaticamente
+├── conversations/     # CSVs das conversas
+├── sessions/         # Dados das sessões
+└── users/           # Dados dos usuários
+```
+
+### **Personalização**
 ```json
+// tenants/minha_empresa/config.json
 {
-  "business_info": {
-    "name": "Clínica Exemplo",
-    "specialty": "Medicina Geral",
-    "location": "São Paulo, SP"
-  },
-  "services": [
-    {
-      "name": "Consulta Geral",
-      "description": "Consulta médica completa",
-      "price": "R$ 150,00"
-    }
-  ],
-  "faq": [
-    {
-      "question": "Como agendar consulta?",
-      "answer": "Ligue para (11) 9999-9999 ou use nosso sistema online."
-    }
-  ]
+  "agent_name": "Sofia",
+  "business_name": "Minha Empresa",
+  "personality": {
+    "tone": "descontraído e amigável",
+    "style": "direto e divertido"
+  }
 }
 ```
 
-## 🧠 Sistema de Memória Conversacional
+---
 
-### **Como Funciona:**
-1. **Salva mensagem** do usuário
-2. **Lê TODA a conversa** desde o início
-3. **Analisa contexto** completo
-4. **Responde** com base no histórico
-5. **Salva resposta** no arquivo da conversa
+## 📊 **Monitoramento e Analytics**
 
-### **Benefícios:**
-- ✅ **Zero repetições** de saudações
-- ✅ **Lembra de tudo** que foi dito
-- ✅ **Conecta informações** entre mensagens
-- ✅ **Personalidade consistente**
+### **Dashboard Streamlit**
+- ✅ Métricas por tenant (usuários, sessões, conversas)
+- ✅ Estatísticas globais de todos os tenants
+- ✅ Sessões ativas em tempo real
+- ✅ Debug detalhado do processo
 
-## 📊 Monitoramento e Analytics
-
-### **Interface Streamlit:**
-- **Métricas por tenant** - usuários, sessões, conversas
-- **Estatísticas globais** - todos os tenants
-- **Sessões ativas** - monitoramento em tempo real
-- **Debug detalhado** - logs completos do processo
-
-### **Via Código:**
+### **Métricas Disponíveis**
 ```python
-from core.agent import get_data_stats, get_all_tenants_stats
+from core.agent import get_data_stats
 
-# Estatísticas de um tenant específico
-stats = get_data_stats("minha_clinica")
+# Estatísticas de um tenant
+stats = get_data_stats("varizemed")
 print(f"Usuários: {stats['total_users']}")
 print(f"Conversas: {stats['total_conversations']}")
-
-# Estatísticas de todos os tenants
-all_stats = get_all_tenants_stats()
-print(f"Total de tenants: {all_stats['total_tenants']}")
+print(f"Mensagens: {stats['total_messages']}")
 ```
 
-## 💬 Como Usar
+### **Relatórios CSV**
+- `conversations/`: Histórico completo por conversa
+- `sessions/`: Dados de sessão e performance
+- `users/`: Informações coletadas dos usuários
 
-### **Interface Web:**
-1. Acesse `http://localhost:8501`
-2. Selecione o tenant na sidebar
-3. Digite sua mensagem no chat
-4. Converse naturalmente - o Timmy lembra de tudo!
+---
 
-### **Programaticamente:**
-```python
-from core.agent import process_message
+## 🔒 **Privacidade e Compliance**
 
-# Mensagem simples
-responses = process_message(
-    text="Olá, me chamo João",
-    tenant_id="minha_clinica"
-)
+### **Isolamento por Tenant**
+- ✅ **Dados Separados**: Cada cliente em diretório próprio
+- ✅ **Zero Cross-Contamination**: Impossível vazar dados entre tenants
+- ✅ **Backup Seletivo**: Por cliente específico
 
-# Com telefone (WhatsApp)
-responses = process_message(
-    text="Quero agendar consulta",
-    phone_number="+5511999999999",
-    tenant_id="minha_clinica"
-)
-```
+### **LGPD/GDPR Ready**
+- ✅ **Consentimento**: Coleta passiva e transparente
+- ✅ **Portabilidade**: Dados em CSV padrão
+- ✅ **Esquecimento**: Deleção completa por tenant
+- ✅ **Auditoria**: Logs completos de todas as interações
 
-## 🔒 Privacidade e Segurança
-
-### **Isolamento por Tenant:**
-- Dados completamente separados por cliente
-- Estrutura de diretórios isolada
-- Arquivos específicos por conversa
-
-### **Proteção no Git:**
+### **Proteção no Git**
 ```gitignore
-# Dados sensíveis nunca são commitados
+# Dados sensíveis NUNCA commitados
 data/*/conversations/
 data/*/sessions/
 data/*/users/
 *.csv
+!**/template.csv
 ```
 
-### **Compliance:**
-- **GDPR/LGPD Ready** - dados por cliente
-- **Backup seletivo** - por tenant
-- **Auditoria completa** - histórico preservado
+---
 
-## 🔧 Configurações Avançadas
+## 🚀 **Uso Programático**
 
-### **Modelo OpenAI:**
+### **Integração Simples**
+```python
+from core.agent import process_message
+
+# Conversa via código
+responses = process_message(
+    text="Olá, me chamo João",
+    tenant_id="varizemed"
+)
+print(responses)  # ['Olá João! Como posso ajudá-lo hoje?']
+
+# WhatsApp (futuro)
+responses = process_message(
+    text="Quero agendar consulta",
+    phone_number="+5511999999999",
+    tenant_id="varizemed"
+)
+```
+
+### **API REST (Roadmap)**
+```bash
+# Enviar mensagem
+curl -X POST http://localhost:8000/tenants/varizemed/message \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Olá", "phone": "+5511999999999"}'
+
+# Buscar histórico
+curl http://localhost:8000/tenants/varizemed/users/+5511999999999/history
+```
+
+---
+
+## 🧪 **Testes e Validação**
+
+### **Teste Básico**
+```python
+# Teste da memória conversacional
+from core.agent import process_message
+
+# Primeira mensagem
+resp1 = process_message("Oi, me chamo Maria", tenant_id="default")
+print(resp1)  # ["Oi Maria! Como posso ajudá-la?"]
+
+# Segunda mensagem - deve lembrar do nome
+resp2 = process_message("Você lembra meu nome?", tenant_id="default") 
+print(resp2)  # ["Claro, seu nome é Maria!"]
+```
+
+### **Teste Multi-Tenant**
+```python
+# Tenant A
+process_message("Sou João", tenant_id="clinica_a")
+
+# Tenant B (dados isolados)
+process_message("Sou João", tenant_id="clinica_b")
+# Não há vazamento entre tenants
+```
+
+### **Validação de Workflow**
+```python
+# Teste workflow médico
+responses = process_message(
+    text="Tenho varizes nas pernas",
+    tenant_id="varizemed"
+)
+# Deve classificar como Angiologia e sugerir médicos
+```
+
+---
+
+## 🛠️ **Configurações Avançadas**
+
+### **Modelos OpenAI**
 ```bash
 # .env
 TIMMY_MODEL=gpt-4o-mini     # Econômico (padrão)
-TIMMY_MODEL=gpt-4o          # Mais avançado
+TIMMY_MODEL=gpt-4o          # Mais avançado  
 TIMMY_MODEL=gpt-3.5-turbo   # Mais rápido
 ```
 
-### **Debug Mode:**
+### **Debug Mode**
 ```bash
 # .env
 DEBUG=true
 ```
 
-### **Micro-responses:**
+### **Micro-Responses**
 ```python
-# core/utils.py - Personalizar quebra de mensagens
+# Personalização no core/utils.py
 def micro_responses(text, min_chars=80, max_chars=120):
     # Quebra inteligente por:
     # 1. Sentenças completas
-    # 2. Pausas naturais 
+    # 2. Pausas naturais
     # 3. Conjunções
-    # 4. Palavras
+    # 4. Palavras (último recurso)
 ```
 
-## 🧪 Testando
+---
 
-### **Teste Básico:**
-```python
-from core.agent import process_message
+## 🎯 **Roadmap v3.0**
 
-# Teste da memória conversacional
-responses = process_message("Oi, me chamo Maria", tenant_id="default")
-responses = process_message("Você lembra meu nome?", tenant_id="default")
-# Resultado: "Sim, seu nome é Maria!"
-```
+### **Próximas Funcionalidades**
+- 🔗 **API REST Completa**: Endpoints para todas as operações
+- 📱 **WhatsApp Nativo**: Integração direta com Meta Cloud API
+- 📊 **Dashboard Avançado**: Analytics em tempo real
+- 🌐 **Deploy Cloud**: Docker + Kubernetes ready
+- 🔄 **Backup Automático**: Por tenant com agendamento
+- 🎯 **A/B Testing**: Personas e estratégias por tenant
 
-### **Teste Multi-Tenant:**
-```python
-# Tenant 1
-process_message("Sou João", tenant_id="clinica_a")
+### **Melhorias de Performance**
+- ⚡ **Cache Inteligente**: Conversas recentes em memória
+- 🔄 **Streaming Responses**: Respostas em tempo real
+- 🗜️ **Compressão**: Arquivos antigos otimizados
+- 📊 **Métricas**: Latência e performance detalhadas
 
-# Tenant 2 (dados isolados)
-process_message("Sou João", tenant_id="clinica_b")
-```
+---
 
-## 🚨 Troubleshooting
+## ❓ **Troubleshooting**
 
-### **Erro: "Module not found"**
+### **Problemas Comuns**
+
+**Erro: "Module not found"**
 ```bash
 pip install -r requirements.txt
 ```
 
-### **Erro: "Invalid API Key"**
+**Erro: "Invalid API Key"**
 ```bash
-# Verifique o .env
+# Verifique no .env
 OPENAI_API_KEY=sk-proj-sua_chave_real_aqui
 ```
 
-### **Erro: "Permission denied" em data/**
-```bash
-# Verifique permissões
-chmod -R 755 data/
-```
+**Conversas não aparecem**
+1. Verifique se o tenant está selecionado corretamente
+2. Confirme que as pastas `data/{tenant}/` foram criadas
+3. Ative debug com `DEBUG=true`
 
-### **Conversas não aparecem:**
-- Verifique se o tenant está selecionado corretamente
-- Confirme que as pastas `data/{tenant}/` foram criadas
-- Veja logs com `DEBUG=true`
+**Performance lenta**
+1. Use `gpt-4o-mini` para economia
+2. Reduza `max_tokens` nas configurações
+3. Implemente cache local se necessário
 
-## 🔮 Roadmap v3.0
+---
 
-### **Próximas Funcionalidades:**
-- 🔗 **API REST** completa
-- 📱 **WhatsApp/Telegram** nativos
-- 🗄️ **Banco de dados** opcional
-- 📊 **Dashboard analytics** avançado
-- 🌐 **Deploy cloud** facilitado
-- 🔄 **Backup automático** por tenant
-- 🎯 **A/B testing** por tenant
+## 🤝 **Contribuindo**
 
-### **Melhorias de Performance:**
-- ⚡ **Cache inteligente** de conversas
-- 🔄 **Streaming responses**
-- 📊 **Métricas de performance**
-- 🗜️ **Compressão** de dados antigos
-
-## 📞 Suporte
-
-### **Problemas?**
-1. Confira este README
-2. Verifique logs com `DEBUG=true`
-3. Teste com tenant "default"
-4. Abra issue no GitHub: [timmy-agent/issues](https://github.com/Iz-castro/timmy-agent/issues)
-
-### **Contribuindo:**
+### **Como Contribuir**
 1. Fork o projeto
 2. Crie feature branch: `git checkout -b feature/nova-funcionalidade`
 3. Commit: `git commit -m 'feat: nova funcionalidade'`
 4. Push: `git push origin feature/nova-funcionalidade`
 5. Abra Pull Request
 
-## 📜 Changelog
+### **Padrões de Código**
+- **Python**: PEP 8 + type hints
+- **Commits**: Conventional Commits
+- **Testes**: pytest para novas funcionalidades
+- **Docs**: Markdown para documentação
 
-### **v2.0.0 - Estrutura Multi-Tenant**
+---
+
+## 📞 **Suporte**
+
+### **Contato**
+- **Desenvolvedor**: Izael Castro
+- **Email**: izaeldecastro@egmail.com
+- **LinkedIn**: [linkedin.com/in/izael-castro](https://linkedin.com/in/izael-castro)
+
+---
+
+## 📜 **Changelog**
+
+### **v2.0.0 - Estrutura Multi-Tenant** *(Atual)*
 - ✨ Sistema de dados organizado por tenant
-- ✨ Arquivo separado por conversa
-- ✨ Releitura completa da conversa
+- ✨ Arquivo separado por conversa (performance)
+- ✨ Releitura completa da conversa (memória)
 - ✨ Micro-responses inteligentes
+- ✨ Workflows customizáveis por tipo de negócio
 - ✨ Interface com estatísticas por tenant
-- 💰 Migração para gpt-4o-mini (99% mais barato)
+- 💰 Migração para gpt-4o-mini (economia)
 
 ### **v1.0.0 - Base Funcional**
 - 🎯 Conversação natural básica
@@ -345,6 +424,16 @@ chmod -R 755 data/
 
 ---
 
-**🤖 Timmy-IA v2.0** - Sua plataforma completa para assistentes conversacionais multi-tenant! 
+## 📄 **Licença**
+
+Este projeto está licenciado sob a [MIT License](LICENSE) - veja o arquivo LICENSE para detalhes.
+
+---
+
+<div align="center">
+
+**🤖 Timmy-IA v2.0** - Sua plataforma completa para assistentes conversacionais multi-tenant!
 
 *Criado com ❤️ por [Izael Castro](https://github.com/Iz-castro)*
+
+</div>

@@ -72,57 +72,36 @@ def format_structured_response(
     session_key: str = None
 ) -> List[str]:
     """
-    Formata resposta estruturada em 3 fases garantindo formatação correta:
-    1. Introdução (pode ser quebrada se muito longa, mas respeitando sentenças)
-    2. Cada item = 1 mensagem COMPLETA (nunca quebrada)
-    3. Fechamento (pode ser quebrada se muito longa, mas respeitando sentenças)
-    
-    Args:
-        intro_text: "Claro! Aqui estão os planos disponíveis:"
-        items: [
-            {"number": "1", "title": "Essencial", "details": "R$ 750/mês - Até 300 conversas..."},
-            {"title": "Dr. João Silva", "details": "CRM 12345, especialista em..."}
-        ]
-        outro_text: "Se precisar de mais detalhes, é só avisar!"
-        session_key: Para micro_responses da intro/outro
-    
-    Returns:
-        Lista de mensagens prontas para envio
+    CORREÇÃO: Formata resposta estruturada SEM quebrar números
     """
     responses = []
     
     print(f"[DEBUG] format_structured_response: {len(items)} itens")
     
-    # Fase 1: Introdução (pode ser quebrada se muito longa, mas respeitando sentenças)
+    # Fase 1: Introdução
     if intro_text and intro_text.strip():
         intro_parts = micro_responses(intro_text, min_chars=120, max_chars=200, session_key=session_key)
         responses.extend(intro_parts)
-        print(f"[DEBUG] Introdução quebrada em {len(intro_parts)} partes")
-    
-    # Fase 2: Cada item = 1 mensagem COMPLETA (nunca quebrada)
+        
+    # Fase 2: CORREÇÃO - Cada item COMPLETO em uma mensagem
     for i, item in enumerate(items, 1):
         if "number" in item and "title" in item:
-            # Formato numerado: "1. **Título**: Detalhes"
+            # 🔥 FORMATO CORRETO: Número + título + detalhes na MESMA mensagem
             formatted_item = f"{item['number']}. **{item['title']}**: {item['details']}"
         elif "title" in item:
-            # Formato com título: "**Título**: Detalhes"  
             formatted_item = f"**{item['title']}**: {item['details']}"
         else:
-            # Formato simples: apenas detalhes
             formatted_item = item.get('details', str(item))
-        
-        # CRÍTICO: Adiciona como mensagem única, sem quebrar
+            
         responses.append(formatted_item)
-        print(f"[DEBUG] Item {i}: {len(formatted_item)} chars - '{formatted_item[:50]}...'")
-    
-    # Fase 3: Fechamento (pode ser quebrada se muito longa, mas respeitando sentenças)
+        
+    # Fase 3: Fechamento
     if outro_text and outro_text.strip():
         outro_parts = micro_responses(outro_text, min_chars=120, max_chars=200, session_key=session_key)
         responses.extend(outro_parts)
-        print(f"[DEBUG] Fechamento quebrado em {len(outro_parts)} partes")
-    
-    print(f"[DEBUG] Total: {len(responses)} mensagens")
+        
     return responses
+
 
 
 # =============================================================================

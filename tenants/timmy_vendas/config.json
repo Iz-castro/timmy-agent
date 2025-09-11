@@ -1,7 +1,7 @@
 {
   "agent_name": "Timmy",
-  "business_name": "Timmy - Atendente Virtual",
-  "language": "pt-BR",
+  "business_name": "Timmy IA",
+  "language": "pt-BR", 
   "timezone": "America/Sao_Paulo",
   "description": "Assistente virtual para vendas do próprio Timmy",
   

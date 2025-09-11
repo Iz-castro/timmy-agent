@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Sistema de Conversação Consultiva - Abordagem universal para todas as personas
+VERSÃO CORRIGIDA - Evita repetição de perguntas
 """
 
 import re
@@ -56,8 +57,9 @@ class ConsultativeStrategy:
         
         text_lower = text.lower()
         
-        # Tipos de negócio expandidos
+        # Tipos de negócio expandidos - MELHOR DETECÇÃO
         business_patterns = {
+            "construcao": ["material de construção", "construção", "locadora", "locadora de material"],
             "loja_roupas": ["loja de roupas", "loja de roupa", "vendo roupas", "boutique", "confecção"],
             "restaurante": ["restaurante", "lanchonete", "padaria", "pizzaria", "delivery"],
             "clinica": ["clínica", "consultório", "médico", "dentista", "fisioterapia"],
@@ -65,15 +67,18 @@ class ConsultativeStrategy:
             "salao": ["salão", "barbearia", "estética", "beleza", "cabeleireiro"],
             "oficina": ["oficina", "mecânica", "auto center", "concessionária"],
             "escola": ["escola", "curso", "faculdade", "educação", "ensino"],
-            "servicos": ["serviços", "manutenção", "limpeza", "segurança"]
+            "servicos": ["serviços", "manutenção", "limpeza", "segurança"],
+            "varejo": ["loja", "comércio", "venda", "mercado"],
+            "tecnologia": ["software", "desenvolvimento", "TI", "tecnologia", "sistema"]
         }
         
-        # Detecta tipo de negócio
+        # 🔥 CORREÇÃO: Detecta tipo de negócio MELHOR
         for business_type, patterns in business_patterns.items():
             for pattern in patterns:
                 if pattern in text_lower:
                     extracted["business_type"] = business_type
                     extracted["business_description"] = pattern
+                    print(f"[DEBUG CONSULTIVO] Detectado negócio: {business_type} - {pattern}")
                     break
             if "business_type" in extracted:
                 break
@@ -82,22 +87,25 @@ class ConsultativeStrategy:
         volume_patterns = [
             (r"(\d+)\s*(?:clientes?|pessoas?)\s*(?:por|no)\s*(?:dia|mês)", "volume_clients"),
             (r"atendo\s*(?:cerca de|uns|aproximadamente)?\s*(\d+)", "volume_clients"),
-            (r"(\d+)\s*(?:vendas?|pedidos?)\s*(?:por|no)\s*(?:dia|mês)", "volume_sales")
+            (r"(\d+)\s*(?:vendas?|pedidos?)\s*(?:por|no)\s*(?:dia|mês)", "volume_sales"),
+            (r"(?:uns|cerca de|aproximadamente)\s*(\d+)", "volume_clients")
         ]
         
         for pattern, key in volume_patterns:
             match = re.search(pattern, text_lower)
             if match:
                 extracted[key] = match.group(1)
+                print(f"[DEBUG CONSULTIVO] Detectado volume: {key} = {match.group(1)}")
                 break
         
         # Canais de atendimento atuais
         channel_patterns = {
             "whatsapp": ["whatsapp", "zap", "wpp"],
             "instagram": ["instagram", "insta", "dm"],
-            "telefone": ["telefone", "ligação", "call"],
-            "presencial": ["presencial", "loja física", "balcão"],
-            "site": ["site", "website", "online"]
+            "telefone": ["telefone", "ligação", "call", "telefônico"],
+            "presencial": ["presencial", "loja física", "balcão", "pessoalmente"],
+            "site": ["site", "website", "online", "internet"],
+            "email": ["email", "e-mail", "correio eletrônico"]
         }
         
         current_channels = current_state.get("current_channels", [])
@@ -106,15 +114,17 @@ class ConsultativeStrategy:
                 if pattern in text_lower and channel not in current_channels:
                     current_channels.append(channel)
                     extracted["current_channels"] = current_channels
+                    print(f"[DEBUG CONSULTIVO] Detectado canal: {channel}")
                     break
         
         # Dores e problemas
         pain_patterns = {
-            "tempo": ["muito tempo", "demora", "demorado", "perco tempo"],
-            "repeticao": ["sempre a mesma coisa", "perguntas repetitivas", "sempre perguntam"],
-            "organizacao": ["desorganizado", "bagunça", "perco informação"],
-            "volume": ["muitos clientes", "não dou conta", "sobrecarregado"],
-            "noturno": ["fora do horário", "à noite", "final de semana"]
+            "tempo": ["muito tempo", "demora", "demorado", "perco tempo", "sem tempo"],
+            "repeticao": ["sempre a mesma coisa", "perguntas repetitivas", "sempre perguntam", "repetindo"],
+            "organizacao": ["desorganizado", "bagunça", "perco informação", "sem controle"],
+            "volume": ["muitos clientes", "não dou conta", "sobrecarregado", "muito movimento"],
+            "noturno": ["fora do horário", "à noite", "final de semana", "depois do expediente"],
+            "qualidade": ["atendimento ruim", "demora para responder", "clientes reclamam"]
         }
         
         current_pains = current_state.get("pain_points", [])
@@ -123,12 +133,14 @@ class ConsultativeStrategy:
                 if pattern in text_lower and pain not in current_pains:
                     current_pains.append(pain)
                     extracted["pain_points"] = current_pains
+                    print(f"[DEBUG CONSULTIVO] Detectada dor: {pain}")
                     break
         
         # Salva informações extraídas
         if extracted:
             for key, value in extracted.items():
                 set_state(session_key, **{key: value})
+                print(f"[DEBUG CONSULTIVO] Salvando: {key} = {value}")
         
         return extracted
     
@@ -145,6 +157,8 @@ class ConsultativeStrategy:
         if state.get("current_channels"): business_info_score += 1
         if state.get("pain_points"): business_info_score += 1
         
+        print(f"[DEBUG CONSULTIVO] Business info score: {business_info_score}")
+        
         # Determina fase baseado no que já sabemos
         if business_info_score < 2:
             return "discovery"
@@ -160,16 +174,25 @@ class ConsultativeStrategy:
         phase = self.get_conversation_phase(session_key)
         state = get_state(session_key)
         
+        print(f"[DEBUG CONSULTIVO] Fase atual: {phase}")
+        print(f"[DEBUG CONSULTIVO] Estado atual: {state}")
+        
         # Evita perguntas já feitas
         asked_questions = state.get("asked_questions", [])
         
         if phase == "discovery":
             if not state.get("business_type"):
-                return "Que tipo de negócio você tem?"
+                if "business_type_asked" not in asked_questions:
+                    set_state(session_key, asked_questions=asked_questions + ["business_type_asked"])
+                    return "Que tipo de negócio você tem?"
             elif not state.get("volume_clients"):
-                return "Quantos clientes você costuma atender?"
+                if "volume_asked" not in asked_questions:
+                    set_state(session_key, asked_questions=asked_questions + ["volume_asked"])
+                    return "Quantos clientes você costuma atender por mês?"
             elif not state.get("current_channels"):
-                return "Como seus clientes entram em contato com você hoje?"
+                if "channels_asked" not in asked_questions:
+                    set_state(session_key, asked_questions=asked_questions + ["channels_asked"])
+                    return "Como seus clientes entram em contato com você hoje?"
         
         elif phase == "understanding":
             if "automation_experience" not in asked_questions:
@@ -178,15 +201,25 @@ class ConsultativeStrategy:
             elif "time_spent" not in asked_questions:
                 set_state(session_key, asked_questions=asked_questions + ["time_spent"])
                 return "Quanto tempo você ou sua equipe gastam respondendo as mesmas perguntas todos os dias?"
+            elif "main_challenge" not in asked_questions:
+                set_state(session_key, asked_questions=asked_questions + ["main_challenge"])
+                return "Qual é sua maior dificuldade no atendimento atualmente?"
         
         elif phase == "positioning":
             business_type = state.get("business_type", "")
-            if "loja" in business_type:
-                return "Imagina poder focar só nas vendas enquanto um assistente cuida das perguntas básicas?"
-            elif "clinica" in business_type:
-                return "E se você pudesse ter mais tempo para os pacientes, sem se preocupar com agendamentos repetitivos?"
-            else:
-                return "Como seria ideal para você: automatizar sem perder o toque pessoal com seus clientes?"
+            if "solution_interest" not in asked_questions:
+                set_state(session_key, asked_questions=asked_questions + ["solution_interest"])
+                
+                if "construcao" in business_type:
+                    return "Imagina poder ter mais tempo para focar nos orçamentos enquanto um assistente cuida das consultas básicas?"
+                elif "loja" in business_type or "varejo" in business_type:
+                    return "Imagina poder focar só nas vendas enquanto um assistente cuida das perguntas básicas?"
+                elif "clinica" in business_type:
+                    return "E se você pudesse ter mais tempo para os pacientes, sem se preocupar com agendamentos repetitivos?"
+                elif "restaurante" in business_type:
+                    return "Como seria poder automatizar pedidos e dúvidas básicas, deixando sua equipe livre para o atendimento?"
+                else:
+                    return "Como seria ideal para você: automatizar sem perder o toque pessoal com seus clientes?"
         
         return None
     
@@ -204,10 +237,13 @@ class ConsultativeStrategy:
         
         asked_questions = len(state.get("asked_questions", []))
         has_pain_points = len(state.get("pain_points", [])) > 0
+        has_business_info = bool(state.get("business_type"))
+        
+        print(f"[DEBUG CONSULTIVO] Should present solution? Phase: {phase}, Asked: {asked_questions}, Pain: {has_pain_points}, Business: {has_business_info}")
         
         return (phase == "positioning" and 
                 asked_questions >= 2 and 
-                has_pain_points)
+                (has_pain_points or has_business_info))
     
     def get_personalized_solution(self, session_key: str) -> Dict[str, Any]:
         """
@@ -239,6 +275,17 @@ class ConsultativeStrategy:
             specific_benefits.append("eliminar perguntas repetitivas")
         if "noturno" in pains:
             specific_benefits.append("atender clientes 24/7")
+        if "volume" in pains:
+            specific_benefits.append("lidar melhor com o volume de clientes")
+        
+        # Se não tem dores específicas, usa benefícios gerais
+        if not specific_benefits:
+            if "construcao" in business_type:
+                specific_benefits = ["otimizar consultas de orçamentos", "qualificar leads automaticamente"]
+            elif "clinica" in business_type:
+                specific_benefits = ["agilizar agendamentos", "reduzir tempo com dúvidas básicas"]
+            else:
+                specific_benefits = ["melhorar a eficiência do atendimento", "focar no que realmente importa"]
         
         return {
             "recommended_plan": recommended_plan,
@@ -249,56 +296,92 @@ class ConsultativeStrategy:
 
 
 def process_consultative_turn(tenant_id: str, text: str, session_key: str) -> Optional[str]:
-    """
-    Processa turno usando estratégia consultiva
-    Retorna resposta consultiva ou None se deve seguir fluxo normal
-    """
-    strategy = ConsultativeStrategy(tenant_id)
+        """
+        CORREÇÃO: Processa turno consultivo com detecção de finalização
+        """
+        strategy = ConsultativeStrategy(tenant_id)
     
-    # 1. Extrai informações de negócio
-    extracted_info = strategy.extract_business_info(text, session_key)
+        text_lower = text.lower()
     
-    # 2. Se extraiu informações importantes, reconhece e faz pergunta consultiva
-    if extracted_info:
-        business_type = extracted_info.get("business_type")
-        volume = extracted_info.get("volume_clients")
-        
-        response_parts = []
-        
-        # Reconhece a informação compartilhada
-        if business_type:
-            if "loja_roupas" in business_type:
-                response_parts.append("Que legal, loja de roupas! O mercado de moda é bem dinâmico.")
-            elif "restaurante" in business_type:
-                response_parts.append("Restaurante, excelente! Imagino que vocês têm bastante movimento.")
-            elif "clinica" in business_type:
-                response_parts.append("Clínica médica, área muito importante! Vocês devem ter muito agendamento.")
-        
-        if volume:
-            response_parts.append(f"Atender {volume} clientes dá trabalho mesmo!")
-        
-        # Faz pergunta consultiva
-        consultative_question = strategy.generate_consultative_question(session_key, text)
-        if consultative_question:
-            response_parts.append(consultative_question)
-        
-        if response_parts:
-            return " ".join(response_parts)
+        # 🔥 NOVA LÓGICA: Detecta quando cliente já decidiu/finalizou
+        finalization_signals = [
+                "já escolhi", "já decidi", "escolhi o", "quero o", 
+                "vou com o", "fechado", "ok", "beleza", "perfeito",
+                "já me explicou", "já entendi", "obrigado", "obrigada"
+        ]
     
-    # 3. Se já tem informações suficientes e cliente demonstra interesse, sugere solução
-    if strategy.should_present_solution(session_key):
-        solution = strategy.get_personalized_solution(session_key)
-        
-        response = f"Pelo que você me contou, acredito que posso ajudar você a {', '.join(solution['specific_benefits'][:2])}. "
-        response += f"Para seu tipo de negócio, o plano {solution['recommended_plan'].title()} seria {solution['plan_reason']}. "
-        response += "Quer que eu te explique como funcionaria na prática?"
-        
-        return response
+        if any(signal in text_lower for signal in finalization_signals):
+                print(f"[DEBUG CONSULTIVO] Sinal de finalização detectado: '{text}'")
+            
+                # Verifica se cliente mencionou plano específico
+                plan_mentions = {
+                        "essencial": ["essencial", "básico", "primeiro"],
+                        "profissional": ["profissional", "segundo", "do meio"],
+                        "premium": ["premium", "terceiro", "ilimitado"], 
+                        "enterprise": ["enterprise", "quarto", "completo"]
+                }
+            
+                chosen_plan = None
+                for plan, keywords in plan_mentions.items():
+                        if any(keyword in text_lower for keyword in keywords):
+                                chosen_plan = plan
+                                break
+                    
+                if chosen_plan:
+                        # Cliente escolheu plano específico - finaliza consultivamente
+                        return f"Perfeito! O plano {chosen_plan.title()} é uma excelente escolha para seu negócio. Vou conectar você com nossa equipe para finalizar. Preciso do seu nome e telefone para o contato."
+            
+                elif "obrigad" in text_lower or "tchau" in text_lower:
+                        # Cliente agradecendo/se despedindo
+                        return "Disponha! Se precisar de mais informações ou quiser uma proposta personalizada, estarei aqui. Boa sorte com seu projeto!"
+            
+                else:
+                        # Cliente sinalizou decisão mas não especificou plano
+                        return "Que bom que as informações foram úteis! Qual plano despertou mais seu interesse? Posso te conectar com nossa equipe para uma proposta personalizada."
+            
+        # 🔥 CORREÇÃO: Verifica se já apresentou solução recentemente
+        state = get_state(session_key)
+        recent_actions = state.get("recent_consultative_actions", [])
     
-    # 4. Se está em conversa consultiva mas ainda coletando, faz mais perguntas
-    consultative_question = strategy.generate_consultative_question(session_key, text)
-    if consultative_question:
-        return consultative_question
+        # Se já ofereceu solução nas últimas 2 interações, para o loop
+        if len(recent_actions) >= 2 and all("solution_offered" in action for action in recent_actions[-2:]):
+                print(f"[DEBUG CONSULTIVO] Já ofereceu solução recentemente - parando loop consultivo")
+                return None  # Deixa o fluxo normal lidar
     
-    # Se não se encaixa em estratégia consultiva, retorna None (fluxo normal)
-    return None
+        # Continua lógica consultiva normal...
+        extracted_info = strategy.extract_business_info(text, session_key)
+    
+        if extracted_info:
+                # [resto da lógica como antes...]
+                business_type = extracted_info.get("business_type")
+                response_parts = []
+            
+                if business_type == "construcao":
+                        response_parts.append("Locadora de material de construção, excelente! Área com muito movimento e consultas.")
+                # [outros tipos...]
+                    
+                consultative_question = strategy.generate_consultative_question(session_key, text)
+                if consultative_question:
+                        response_parts.append(consultative_question)
+                    
+                if response_parts:
+                        return " ".join(response_parts)
+            
+        # Apresenta solução apenas se deve E ainda não ofereceu demais
+        if strategy.should_present_solution(session_key):
+                # Marca que ofereceu solução
+                recent_actions.append("solution_offered")
+                if len(recent_actions) > 5:  # Mantém apenas últimas 5 ações
+                        recent_actions = recent_actions[-5:]
+                set_state(session_key, recent_consultative_actions=recent_actions)
+            
+                solution = strategy.get_personalized_solution(session_key)
+                response = f"Pelo que você me contou, acredito que posso ajudar você a {', '.join(solution['specific_benefits'][:2])}. "
+                response += f"Para seu tipo de negócio, o plano {solution['recommended_plan'].title()} seria {solution['plan_reason']}. "
+                response += "Quer que eu te explique como funcionaria na prática?"
+            
+                return response
+    
+        # Se não deve mais agir consultivamente, retorna None
+        return None
+

@@ -327,7 +327,7 @@ CONHECIMENTO DISPONÍVEL:
 {knowledge_text}
 
 REGRAS DE RESPOSTA:
-- Respostas entre 80-120 caracteres quando possível
+- Respostas entre 120-200 caracteres quando possível
 - Se não souber algo específico, seja honesto
 - Mantenha naturalidade e fluidez
 - JAMAIS ignore o contexto da conversa
@@ -386,9 +386,8 @@ REGRAS DE RESPOSTA:
     def _handle_first_interaction(self, message: Message, conversation_history: List[Dict]) -> List[str]:
         """Lida com primeira interação baseado no histórico completo"""
         
-        # Verifica se realmente deve fazer saudação
         if not self._should_send_greeting(conversation_history):
-            return []  # Não faz saudação
+            return []
         
         try:
             hour = datetime.now().hour
@@ -398,21 +397,29 @@ REGRAS DE RESPOSTA:
                 greeting = "Boa tarde"
             else:
                 greeting = "Boa noite"
-            
+                
             agent_name = self.knowledge.get("agent_name", "Timmy")
             business_name = self.knowledge.get("business_name", "nossa empresa")
             
+            # 🔥 CORREÇÃO: Saudação mais natural baseada no intent
             intent = self._analyze_intent(message.text, conversation_history)
             
             if intent == "first_greeting":
-                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Como posso ajudar você hoje?"
+                response = f"{greeting}! Sou o {agent_name}. Como posso ajudar você hoje?"
             elif intent == "help_request":
-                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Claro! Estou aqui para te ajudar. O que você gostaria de saber?"
+                response = f"{greeting}! Sou o {agent_name}. Estou aqui para te ajudar. O que você gostaria de saber?"
+            elif intent == "pricing":
+                response = f"{greeting}! Sou o {agent_name}. Vou te ajudar com informações sobre nossos planos!"
             else:
-                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Vi que você quer saber sobre algo específico. Vou te ajudar!"
-            
+                # Para qualquer outra mensagem inicial
+                response = f"{greeting}! Sou o {agent_name}. Em que posso te ajudar?"
+                
             return micro_responses(response, session_key=message.session_key)
-            
+        
+        except Exception as e:
+            print(f"[ERROR] Erro em _handle_first_interaction: {e}")
+            return ["Olá! Como posso ajudar você hoje?"]
+        
         except Exception as e:
             print(f"[ERROR] Erro em _handle_first_interaction: {e}")
             return ["Olá! Como posso ajudar você hoje?"]
