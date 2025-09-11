@@ -1,0 +1,16 @@
+core/
+├── agent.py                    # Orquestrador principal
+├── utils.py                    # Utilitários base
+├── persistence.py              # Persistência multi-tenant
+├── interfaces/                 # NOVO: Contratos bem definidos
+│   ├── strategy.py            # Interface para estratégias
+│   ├── formatter.py           # Interface para formatadores
+│   ├── workflow.py            # Interface para workflows
+│   └── database.py            # Interface para bancos
+├── extensions/                 # NOVO: Sistema de plugins
+│   ├── loader.py              # Carregador de extensões
+│   └── registry.py            # Registro de componentes
+└── processors/                 # NOVO: Processadores genéricos
+    ├── message.py             # Processamento de mensagens
+    ├── context.py             # Análise de contexto
+    └── response.py            # Geração de respostas

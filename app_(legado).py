@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Timmy-IA - Interface Streamlit
-ATUALIZADO: Integra com nova arquitetura mantendo funcionalidade atual
+Aplicação web com estrutura organizada por tenant
 """
 
 import os
@@ -13,22 +13,14 @@ from dotenv import load_dotenv
 # Carrega variáveis de ambiente
 load_dotenv()
 
-# Imports do sistema atual
+# Importa o agente principal
 try:
     from core.agent import handle_turn, Message, get_user_history, get_data_stats, get_all_tenants_stats
     from core.utils import get_state, clear_session, get_system_stats, list_sessions
     from core.persistence import persistence_manager
 except ImportError as e:
-    st.error(f"Erro ao importar módulos principais: {e}")
+    st.error(f"Erro ao importar módulos: {e}")
     st.stop()
-
-# Imports da nova arquitetura (opcional)
-try:
-    from core.agent import get_extension_info, reload_tenant_extensions
-    from core.utils import check_new_architecture_availability
-    NEW_ARCHITECTURE_AVAILABLE = True
-except ImportError:
-    NEW_ARCHITECTURE_AVAILABLE = False
 
 # =============================================================================
 # CONFIGURAÇÃO DA PÁGINA
@@ -101,39 +93,6 @@ with col2:
             del st.session_state.messages
         st.rerun()
 
-# NOVA SEÇÃO: Informações da Nova Arquitetura
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔧 Sistema")
-
-# Verifica status da nova arquitetura
-if NEW_ARCHITECTURE_AVAILABLE:
-    architecture_status = check_new_architecture_availability()
-    
-    if architecture_status.get("available"):
-        st.sidebar.success("✅ Nova arquitetura ativa")
-        
-        # Botão para recarregar extensões
-        if st.sidebar.button("🔄 Recarregar Extensões"):
-            result = reload_tenant_extensions(tenant_id)
-            if result.get("status") == "success":
-                st.sidebar.success(f"Extensões recarregadas: {result['extensions_loaded']}")
-            else:
-                st.sidebar.error(f"Erro: {result.get('error', 'Falha desconhecida')}")
-            st.rerun()
-        
-        # Informações de extensões do tenant atual
-        if st.sidebar.checkbox("📋 Extensões do Tenant"):
-            extension_info = get_extension_info(tenant_id)
-            if "error" not in extension_info:
-                st.sidebar.json(extension_info, expanded=True)
-            else:
-                st.sidebar.error(extension_info["error"])
-    else:
-        st.sidebar.warning("⚠️ Nova arquitetura indisponível")
-        st.sidebar.caption(f"Erro: {architecture_status.get('error', 'Desconhecido')}")
-else:
-    st.sidebar.info("ℹ️ Sistema legado ativo")
-
 # Estatísticas do sistema
 st.sidebar.markdown("---")
 if st.sidebar.checkbox("📈 Estatísticas do Sistema"):
@@ -157,56 +116,10 @@ if st.sidebar.checkbox("🌐 Todos os Tenants"):
 st.title("🤖 Timmy-IA")
 st.caption(f"Assistente conversacional inteligente • Tenant: **{tenant_id}**")
 
-# NOVA SEÇÃO: Status da Arquitetura
-col1, col2, col3 = st.columns([2, 1, 1])
-
-with col1:
-    if NEW_ARCHITECTURE_AVAILABLE:
-        architecture_status = check_new_architecture_availability()
-        if architecture_status.get("available"):
-            st.success("✅ Nova arquitetura ativa - Funcionalidade completa")
-        else:
-            st.warning("⚠️ Nova arquitetura com problemas - Usando sistema legado")
-    else:
-        st.info("ℹ️ Sistema legado - Funcional mas sem extensões")
-
-with col2:
-    if st.button("🔍 Detalhes Técnicos"):
-        st.session_state.show_technical_details = not st.session_state.get("show_technical_details", False)
-
-with col3:
-    if tenant_id == "timmy_vendas":
-        st.markdown("💼 **MODO VENDAS**")
-    elif tenant_id == "varizemed":
-        st.markdown("🏥 **MODO MÉDICO**")
-    else:
-        st.markdown("🌐 **MODO PADRÃO**")
-
-# Informações técnicas detalhadas (toggle)
-if st.session_state.get("show_technical_details", False):
-    with st.expander("🔧 Detalhes Técnicos Expandidos", expanded=True):
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.subheader("Sistema Atual")
-            if NEW_ARCHITECTURE_AVAILABLE:
-                architecture_status = check_new_architecture_availability()
-                st.json(architecture_status)
-            else:
-                st.json({"status": "legacy", "message": "Nova arquitetura não carregada"})
-        
-        with col2:
-            st.subheader("Extensões do Tenant")
-            if NEW_ARCHITECTURE_AVAILABLE:
-                extension_info = get_extension_info(tenant_id)
-                st.json(extension_info)
-            else:
-                st.json({"message": "Extensões indisponíveis no sistema legado"})
-
-# Informações da estrutura de dados
+# Informações da nova estrutura
 if st.checkbox("ℹ️ Mostrar estrutura de dados"):
     st.info(f"""
-    **Estrutura organizada por tenant:**
+    **Nova estrutura organizada por tenant:**
     ```
     data/
     └── {tenant_id}/
@@ -214,20 +127,7 @@ if st.checkbox("ℹ️ Mostrar estrutura de dados"):
         ├── sessions/        # Sessões do tenant
         └── users/          # Usuários do tenant
     ```
-    
-    **Extensões (Nova Arquitetura):**
-    ```
-    tenants/
-    └── {tenant_id}/
-        ├── strategies/      # Estratégias de conversação
-        ├── workflows/       # Fluxos específicos
-        └── formatters/      # Formatadores customizados
-    ```
     """)
-
-# =============================================================================
-# CHAT INTERFACE
-# =============================================================================
 
 # Inicializa histórico de mensagens
 if "messages" not in st.session_state:
@@ -261,24 +161,9 @@ if prompt := st.chat_input("Digite sua mensagem..."):
             tenant_id=tenant_id
         )
         
-        # Processa através do agente (REFATORADO)
+        # Processa através do agente
         with st.spinner("Pensando..."):
             responses = handle_turn(tenant_id, message)
-        
-        # Feedback sobre qual sistema foi usado
-        if NEW_ARCHITECTURE_AVAILABLE:
-            architecture_status = check_new_architecture_availability()
-            if architecture_status.get("available"):
-                # Verifica se extensões foram ativadas
-                extension_info = get_extension_info(tenant_id)
-                if extension_info.get("totals", {}).get("strategies", 0) > 0:
-                    st.caption("🔧 Processado com nova arquitetura + extensões específicas")
-                else:
-                    st.caption("🔧 Processado com nova arquitetura (sem extensões específicas)")
-            else:
-                st.caption("⚠️ Processado com sistema legado (nova arquitetura indisponível)")
-        else:
-            st.caption("ℹ️ Processado com sistema legado")
         
         # Exibe respostas do assistente
         for response in responses:
@@ -305,14 +190,14 @@ if prompt := st.chat_input("Digite sua mensagem..."):
         })
 
 # =============================================================================
-# FOOTER E INFORMAÇÕES
+# FOOTER
 # =============================================================================
 
 st.markdown("---")
 
 # Informações de ajuda
 with st.expander("ℹ️ Como usar"):
-    st.markdown(f"""
+    st.markdown("""
     **Timmy-IA** é um assistente conversacional que:
     
     - 💬 **Conversa naturalmente** com você
@@ -322,15 +207,10 @@ with st.expander("ℹ️ Como usar"):
     - 🏢 **Organizado por tenant** para múltiplos clientes
     - 📁 **Arquivo separado** para cada conversa
     
-    **Tenant Atual: {tenant_id}**
-    {"- 💼 **Estratégia consultiva** para vendas ativa" if tenant_id == "timmy_vendas" else ""}
-    {"- 🏥 **Workflow médico** especializado ativo" if tenant_id == "varizemed" else ""}
-    
     **Dicas:**
     - Mencione seu nome para que o Timmy te reconheça
     - Pergunte sobre produtos, serviços ou informações da empresa
     - Use a sidebar para trocar de tenant ou ver estatísticas
-    {"- Para teste de vendas: mencione seu tipo de negócio" if tenant_id == "timmy_vendas" else ""}
     """)
 
 # Debug info (apenas em desenvolvimento)
@@ -345,19 +225,11 @@ if os.getenv("DEBUG", "false").lower() == "true":
         st.write("**Estatísticas do Tenant Atual:**")
         st.json(get_data_stats(tenant_id))
         
-        if NEW_ARCHITECTURE_AVAILABLE:
-            st.write("**Status da Nova Arquitetura:**")
-            st.json(check_new_architecture_availability())
-            
-            st.write("**Extensões do Tenant:**")
-            st.json(get_extension_info(tenant_id))
-        
         st.write("**Variáveis de Ambiente:**")
         env_vars = {
             "OPENAI_API_KEY": "***" if os.getenv("OPENAI_API_KEY") else "❌ Não definida",
             "TIMMY_MODEL": os.getenv("TIMMY_MODEL", "Não definido"),
-            "DEBUG": os.getenv("DEBUG", "false"),
-            "NEW_ARCHITECTURE": "available" if NEW_ARCHITECTURE_AVAILABLE else "unavailable"
+            "DEBUG": os.getenv("DEBUG", "false")
         }
         st.json(env_vars)
         
@@ -413,34 +285,12 @@ with col4:
     active_sessions_count = tenant_stats.get("active_sessions", 0)
     st.metric("Ativas", active_sessions_count)
 
-# NOVA: Linha de métricas da arquitetura
-if NEW_ARCHITECTURE_AVAILABLE:
-    st.markdown("**Nova Arquitetura:**")
-    col1, col2, col3, col4 = st.columns(4)
-    
-    extension_info = get_extension_info(tenant_id)
-    totals = extension_info.get("totals", {})
-    
-    with col1:
-        st.metric("Estratégias", totals.get("strategies", 0))
-    
-    with col2:
-        st.metric("Workflows", totals.get("workflows", 0))
-    
-    with col3:
-        st.metric("Formatadores", totals.get("formatters", 0))
-    
-    with col4:
-        persistence_type = tenant_stats.get("persistence_type", "csv")
-        st.metric("Persistência", persistence_type.upper())
-
 # Footer com informações da versão
 st.markdown(
     f"""
     <div style='text-align: center; color: #666; font-size: 0.8em; margin-top: 2rem;'>
-        🤖 <strong>Timmy-IA v2.1</strong> | Assistente Conversacional com Nova Arquitetura<br>
-        <em>Sistema {'Híbrido' if NEW_ARCHITECTURE_AVAILABLE else 'Legado'} | Tenant: {tenant_id} | 
-        Arquitetura: {'Nova + Legado' if NEW_ARCHITECTURE_AVAILABLE else 'Legado Apenas'}</em>
+        🤖 <strong>Timmy-IA v2.0</strong> | Assistente Conversacional com Estrutura por Tenant<br>
+        <em>Criado com Streamlit + OpenAI + Python | Tenant: {tenant_id}</em>
     </div>
     """, 
     unsafe_allow_html=True

@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Core Agent - Com sistema de releitura completa + nova arquitetura de extensões
-REFATORADO: Integra com processadores e mantém funcionalidade atual
+Core Agent - Com sistema de releitura completa da conversa + formatação estruturada automática
 """
 
 import json
@@ -13,23 +12,10 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime
 
-# Imports da nova arquitetura
-try:
-    from core.processors.message import MessageProcessor, ProcessedMessage
-    from core.processors.context import ContextProcessor, ContextAnalysis
-    from core.processors.response import ResponseProcessor, ResponseConfig, ResponseContext
-    from core.extensions.loader import extension_loader
-    from core.interfaces.strategy import Message as IMessage, ConversationContext
-    NEW_ARCHITECTURE_AVAILABLE = True
-except ImportError as e:
-    print(f"[INFO] Nova arquitetura não disponível, usando sistema legado: {e}")
-    NEW_ARCHITECTURE_AVAILABLE = False
-
-# Imports do sistema atual (mantidos para compatibilidade)
 from core.utils import (
     micro_responses, load_knowledge_data, get_state, set_state, 
     mark_once, chat_complete, extract_info_from_text, 
-    format_structured_response
+    format_structured_response, load_tenant_workflow
 )
 
 from core.persistence import (
@@ -51,7 +37,7 @@ class Message:
 
 
 class ConversationReviewer:
-    """Sistema de releitura completa da conversa (MANTIDO)"""
+    """Sistema de releitura completa da conversa"""
     
     def __init__(self, session_key: str, tenant_id: str = "default"):
         self.session_key = session_key
@@ -62,6 +48,7 @@ class ConversationReviewer:
         print(f"[DEBUG] Buscando histórico completo para sessão: {self.session_key}")
         
         try:
+            # Busca todas as mensagens da sessão no tenant específico
             messages = persistence_manager.get_session_messages(self.session_key, self.tenant_id)
             
             conversation_history = []
@@ -73,10 +60,18 @@ class ConversationReviewer:
                 })
             
             print(f"[DEBUG] Recuperadas {len(conversation_history)} mensagens da sessão")
+            
+            # Debug: mostra últimas 3 mensagens
+            if conversation_history:
+                print(f"[DEBUG] Últimas mensagens:")
+                for i, msg in enumerate(conversation_history[-3:], 1):
+                    print(f"[DEBUG]   {i}. {msg['role']}: {msg['content'][:50]}...")
+            
             return conversation_history
             
         except Exception as e:
             print(f"[ERROR DEBUG] Erro ao recuperar histórico: {e}")
+            print(f"[ERROR DEBUG] Traceback: {traceback.format_exc()}")
             return []
     
     def format_conversation_for_review(self, history: List[Dict[str, str]]) -> str:
@@ -102,12 +97,18 @@ class ConversationReviewer:
             print(f"[DEBUG] Nenhum histórico encontrado - primeira mensagem")
             return ""
         
+        # Formata para análise
         formatted_conversation = self.format_conversation_for_review(history)
         
         user_name = self._extract_user_name_from_history(history)
         shared_info = self._extract_shared_info_from_history(history)
         already_introduced = self._check_if_already_introduced(history)
         
+        print(f"[DEBUG] Nome extraído: {user_name}")
+        print(f"[DEBUG] Já se apresentou: {already_introduced}")
+        print(f"[DEBUG] Info compartilhada: {shared_info}")
+        
+        # Adiciona análise contextual
         context_analysis = f"""
 {formatted_conversation}
 
@@ -119,6 +120,7 @@ ANÁLISE PARA PRÓXIMA RESPOSTA:
 - Informações já compartilhadas: {shared_info}
 """
         
+        print(f"[DEBUG] Contexto gerado com {len(context_analysis)} caracteres")
         return context_analysis
     
     def _extract_user_name_from_history(self, history: List[Dict[str, str]]) -> str:
@@ -126,9 +128,11 @@ ANÁLISE PARA PRÓXIMA RESPOSTA:
         for msg in history:
             if msg["role"] == "user":
                 content = msg["content"].lower()
+                # Padrões para identificar nome
                 patterns = ["me chamo", "meu nome é", "sou o", "sou a", "eu sou"]
                 for pattern in patterns:
                     if pattern in content:
+                        # Extração simples do nome
                         match = re.search(f"{pattern}\\s+([A-Za-zÀ-ÿ]+)", content, re.IGNORECASE)
                         if match:
                             return match.group(1)
@@ -142,11 +146,17 @@ ANÁLISE PARA PRÓXIMA RESPOSTA:
             if msg["role"] == "user":
                 content = msg["content"].lower()
                 
+                # Profissão/trabalho
                 if any(word in content for word in ["trabalho", "sou", "desenvolvo", "programo", "faço"]):
                     shared_info.append("Profissão/atividade mencionada")
                 
+                # Projetos
                 if any(word in content for word in ["projeto", "criando", "construindo", "desenvolvendo"]):
                     shared_info.append("Projeto atual mencionado")
+                
+                # Interesses
+                if any(word in content for word in ["gosto", "interesse", "especialista"]):
+                    shared_info.append("Interesses mencionados")
         
         return ", ".join(shared_info) if shared_info else "Nenhuma informação específica"
     
@@ -161,69 +171,27 @@ ANÁLISE PARA PRÓXIMA RESPOSTA:
 
 
 class TimmyAgent:
-    """Agente conversacional com releitura completa + nova arquitetura"""
+    """Agente conversacional com releitura completa"""
     
     def __init__(self, tenant_id: str = "default"):
         self.tenant_id = tenant_id
         self.knowledge = load_knowledge_data(tenant_id)
-        
-        # Inicializa processadores da nova arquitetura se disponível
-        if NEW_ARCHITECTURE_AVAILABLE:
-            self.message_processor = MessageProcessor()
-            self.context_processor = ContextProcessor()
-            self.response_processor = ResponseProcessor()
-            self.extensions = extension_loader.load_all_tenant_extensions(tenant_id)
-            print(f"[AGENT] Nova arquitetura carregada para tenant {tenant_id}")
-        else:
-            self.message_processor = None
-            self.context_processor = None
-            self.response_processor = None
-            self.extensions = {"strategies": [], "workflows": [], "formatters": [], "database": None}
-            print(f"[AGENT] Usando sistema legado para tenant {tenant_id}")
     
     def _detect_and_format_structured_content(self, response_text: str, session_key: str) -> List[str]:
         """
         Detecta se a resposta contém conteúdo estruturado e aplica formatação adequada
-        HYBRID: Usa nova arquitetura se disponível, senão usa sistema legado
         """
         print(f"[DEBUG] Analisando resposta para formatação estruturada...")
         
-        # NOVA ARQUITETURA: Usa ResponseProcessor
-        if NEW_ARCHITECTURE_AVAILABLE and self.response_processor:
-            try:
-                # Carrega configuração do tenant
-                tenant_config = self.knowledge.get("response_settings", {})
-                config = ResponseConfig(
-                    min_chars=tenant_config.get("min_chars", 80),
-                    max_chars=tenant_config.get("max_chars", 200),
-                    use_emojis=self.knowledge.get("personality", {}).get("emoji_usage", False)
-                )
-                
-                # Contexto básico para o processador
-                context = ResponseContext(
-                    user_message="",
-                    conversation_history=[],
-                    extracted_info={},
-                    intent="general",
-                    tenant_id=self.tenant_id,
-                    session_key=session_key
-                )
-                
-                formatted = self.response_processor.process_response(response_text, context, config)
-                print(f"[DEBUG] Nova arquitetura aplicou: {formatted.formatting_applied}")
-                return formatted.messages
-                
-            except Exception as e:
-                print(f"[WARNING] Erro na nova arquitetura, usando legado: {e}")
-        
-        # SISTEMA LEGADO: Usa format_structured_response e micro_responses
+        # Padrões que indicam conteúdo estruturado
         structured_patterns = [
-            r'\d+\.\s*\*\*.*?\*\*:',
-            r'\d+\.\s*[A-Z][^:]*:',
-            r'\*\*[^*]+\*\*:',
-            r'(?:\d+\.\s*){2,}',
+            r'\d+\.\s*\*\*.*?\*\*:',  # "1. **Título**:"
+            r'\d+\.\s*[A-Z][^:]*:',   # "1. Título:"
+            r'\*\*[^*]+\*\*:',        # "**Título**:"
+            r'(?:\d+\.\s*){2,}',      # Múltiplos itens numerados
         ]
         
+        # Verifica se contém padrões estruturados
         has_structured_content = any(
             re.search(pattern, response_text, re.MULTILINE | re.IGNORECASE) 
             for pattern in structured_patterns
@@ -248,11 +216,13 @@ class TimmyAgent:
             if not line:
                 continue
                 
+            # Detecta início de item numerado ou com título
             item_match = re.match(r'^(\d+)\.\s*\*\*([^*]+)\*\*:\s*(.*)', line)
             simple_item_match = re.match(r'^(\d+)\.\s*([^:]+):\s*(.*)', line)
             title_match = re.match(r'^\*\*([^*]+)\*\*:\s*(.*)', line)
             
             if item_match:
+                # Salva item anterior se existir
                 if current_item:
                     items.append(current_item)
                 
@@ -285,53 +255,92 @@ class TimmyAgent:
                 }
                 
             else:
+                # Linha de continuação ou outro conteúdo
                 if current_section == "intro" and not items:
                     intro_lines.append(line)
                 elif current_section == "items" and current_item:
+                    # Adiciona à descrição do item atual
                     if current_item.get("details"):
                         current_item["details"] += " " + line
                     else:
                         current_item["details"] = line
-                elif items:
+                elif items:  # Já temos itens, então é fechamento
                     current_section = "outro"
                     outro_lines.append(line)
                 else:
                     intro_lines.append(line)
         
+        # Adiciona último item se existir
         if current_item:
             items.append(current_item)
         
+        # Monta textos das seções
         intro_text = " ".join(intro_lines) if intro_lines else ""
         outro_text = " ".join(outro_lines) if outro_lines else ""
         
+        # Aplica formatação padrão se não houver introdução/fechamento adequados
         if not intro_text and items:
             if any("plano" in str(item).lower() for item in items):
                 intro_text = "Claro! Aqui estão os planos disponíveis:"
                 outro_text = "Se precisar de mais detalhes sobre algum plano, é só avisar!"
+            elif any("médico" in str(item).lower() or "doutor" in str(item).lower() for item in items):
+                intro_text = "Nossa equipe médica tem excelentes profissionais:"
+                outro_text = "Posso ajudar com agendamento ou mais informações sobre algum médico específico?"
+            else:
+                intro_text = "Aqui estão as informações:"
+                outro_text = "Precisa de mais alguma coisa?"
         
+        # Usa format_structured_response
         return format_structured_response(intro_text, items, outro_text, session_key)
+        
+    def _build_system_prompt_with_full_context(self, conversation_context: str) -> str:
+        """Constrói prompt do sistema com contexto completo da conversa"""
+        
+        knowledge_text = ""
+        if self.knowledge:
+            knowledge_text = json.dumps(self.knowledge, indent=2, ensure_ascii=False)
+        
+        # Prompt com contexto completo
+        base_prompt = f"""Você é um assistente virtual inteligente com acesso ao histórico completo da conversa.
+
+PERSONALIDADE:
+- Seja natural, cordial e consistente
+- NUNCA se reapresente se já fez isso antes na conversa
+- NUNCA repita saudações desnecessariamente
+- Use informações já compartilhadas pelo usuário
+- Demonstre que acompanha o fluxo da conversa
+- Seja conversacional e menos robótico
+
+INSTRUÇÕES CRÍTICAS:
+- SEMPRE consulte o histórico completo antes de responder
+- Se já se apresentou, não faça novamente
+- Se já sabe o nome do usuário, use-o naturalmente
+- Se já sabe informações sobre o usuário, referencie-as
+- Mantenha consistência com mensagens anteriores
+- Responda de forma clara e objetiva
+- Não invente informações não mencionadas
+
+CONTEXTO COMPLETO DA CONVERSA:
+{conversation_context}
+
+CONHECIMENTO DISPONÍVEL:
+{knowledge_text}
+
+REGRAS DE RESPOSTA:
+- Respostas entre 120-200 caracteres quando possível
+- Se não souber algo específico, seja honesto
+- Mantenha naturalidade e fluidez
+- JAMAIS ignore o contexto da conversa
+- Demonstre que você acompanha e lembra da conversa
+"""
+        
+        return base_prompt
     
     def _analyze_intent(self, text: str, conversation_history: List[Dict]) -> str:
-        """
-        Analisa intenção considerando o histórico completo
-        HYBRID: Usa MessageProcessor se disponível
-        """
-        # NOVA ARQUITETURA: Usa MessageProcessor
-        if NEW_ARCHITECTURE_AVAILABLE and self.message_processor:
-            try:
-                message = IMessage(
-                    text=text,
-                    session_key="temp",
-                    tenant_id=self.tenant_id
-                )
-                processed = self.message_processor.process_message(message, conversation_history)
-                print(f"[DEBUG] Intent detectado pela nova arquitetura: {processed.intent}")
-                return processed.intent
-            except Exception as e:
-                print(f"[WARNING] Erro no MessageProcessor, usando análise legada: {e}")
-        
-        # SISTEMA LEGADO: Análise manual
+        """Analisa intenção considerando o histórico completo"""
         text_lower = text.lower()
+        
+        # Verifica se é realmente a primeira mensagem
         user_messages = [msg for msg in conversation_history if msg["role"] == "user"]
         is_truly_first = len(user_messages) == 0
         
@@ -350,10 +359,19 @@ class TimmyAgent:
     
     def _should_send_greeting(self, conversation_history: List[Dict]) -> bool:
         """Determina se deve enviar saudação baseado no histórico completo"""
+        
+        print(f"[DEBUG] Verificando se deve enviar saudação...")
+        print(f"[DEBUG] Histórico tem {len(conversation_history)} mensagens")
+        
+        # Se não há histórico, é primeira interação
         if not conversation_history:
+            print(f"[DEBUG] Sem histórico - primeira interação!")
             return True
         
+        # Verifica se já se apresentou
         already_introduced = self._check_if_already_introduced(conversation_history)
+        print(f"[DEBUG] Já se apresentou: {already_introduced}")
+        
         return not already_introduced
     
     def _check_if_already_introduced(self, conversation_history: List[Dict]) -> bool:
@@ -367,6 +385,7 @@ class TimmyAgent:
     
     def _handle_first_interaction(self, message: Message, conversation_history: List[Dict]) -> List[str]:
         """Lida com primeira interação baseado no histórico completo"""
+        
         if not self._should_send_greeting(conversation_history):
             return []
         
@@ -378,60 +397,36 @@ class TimmyAgent:
                 greeting = "Boa tarde"
             else:
                 greeting = "Boa noite"
-            
+                
             agent_name = self.knowledge.get("agent_name", "Timmy")
             business_name = self.knowledge.get("business_name", "nossa empresa")
             
+            # 🔥 CORREÇÃO: Saudação mais natural baseada no intent
             intent = self._analyze_intent(message.text, conversation_history)
             
             if intent == "first_greeting":
-                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Como posso ajudar você hoje?"
+                response = f"{greeting}! Sou o {agent_name}. Como posso ajudar você hoje?"
             elif intent == "help_request":
-                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Claro! Estou aqui para te ajudar. O que você gostaria de saber?"
+                response = f"{greeting}! Sou o {agent_name}. Estou aqui para te ajudar. O que você gostaria de saber?"
+            elif intent == "pricing":
+                response = f"{greeting}! Sou o {agent_name}. Vou te ajudar com informações sobre nossos planos!"
             else:
-                response = f"{greeting}! Eu sou {agent_name}, assistente de {business_name}. Vi que você quer saber sobre algo específico. Vou te ajudar!"
-            
-            return self._detect_and_format_structured_content(response, message.session_key)
-            
+                # Para qualquer outra mensagem inicial
+                response = f"{greeting}! Sou o {agent_name}. Em que posso te ajudar?"
+                
+            return micro_responses(response, session_key=message.session_key)
+        
+        except Exception as e:
+            print(f"[ERROR] Erro em _handle_first_interaction: {e}")
+            return ["Olá! Como posso ajudar você hoje?"]
+        
         except Exception as e:
             print(f"[ERROR] Erro em _handle_first_interaction: {e}")
             return ["Olá! Como posso ajudar você hoje?"]
     
     def _collect_user_info(self, text: str, session_key: str) -> Dict[str, str]:
-        """
-        Coleta informações do usuário
-        HYBRID: Usa MessageProcessor se disponível
-        """
+        """Coleta informações do usuário"""
         try:
-            # NOVA ARQUITETURA: Usa MessageProcessor
-            if NEW_ARCHITECTURE_AVAILABLE and self.message_processor:
-                try:
-                    message = IMessage(text=text, session_key=session_key, tenant_id=self.tenant_id)
-                    processed = self.message_processor.process_message(message, [])
-                    extracted = {}
-                    
-                    # Converte entidades extraídas para formato legado
-                    for entity_type, values in processed.extracted_entities.items():
-                        if values and len(values) > 0:
-                            extracted[entity_type] = values[0]  # Pega primeiro valor
-                    
-                    current_state = get_state(session_key)
-                    collected = {}
-                    
-                    for key, value in extracted.items():
-                        if value and not current_state.get(key):
-                            collected[key] = value
-                            set_state(session_key, **{key: value})
-                    
-                    if collected:
-                        self._persist_user_data(session_key, current_state, collected)
-                    
-                    return collected
-                    
-                except Exception as e:
-                    print(f"[WARNING] Erro no MessageProcessor para extração, usando sistema legado: {e}")
-            
-            # SISTEMA LEGADO: extract_info_from_text
             extracted = extract_info_from_text(text)
             collected = {}
             
@@ -507,6 +502,7 @@ class TimmyAgent:
             
         except Exception as e:
             print(f"[ERROR] Erro em _persist_user_data: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
     
     def _save_message(self, session_key: str, role: str, content: str, intent: str = None):
         """Salva mensagem no histórico usando estrutura por tenant"""
@@ -524,57 +520,23 @@ class TimmyAgent:
                 intent=intent
             )
             
+            # Salva mensagem no arquivo específico da conversa
             save_message(message, self.tenant_id)
             persistence_manager.update_session_message_count(session_key, self.tenant_id)
             
+            # Atualiza contador local
             message_count = current_state.get("message_count", 0) + 1
             set_state(session_key, message_count=message_count)
             
         except Exception as e:
             print(f"[ERROR] Erro em _save_message: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
     
     def _generate_contextual_response(self, message: Message, conversation_context: str) -> List[str]:
-        """
-        Gera resposta com base no contexto completo da conversa
-        HYBRID: Verifica workflows e estratégias da nova arquitetura primeiro
-        """
+        """Gera resposta com base no contexto completo da conversa"""
+        
         try:
-            # NOVA ARQUITETURA: Verifica estratégias e workflows específicos do tenant
-            if NEW_ARCHITECTURE_AVAILABLE:
-                # Cria contexto para nova arquitetura
-                conversation_reviewer = ConversationReviewer(message.session_key, self.tenant_id)
-                history = conversation_reviewer.get_full_conversation_history()
-                
-                context = ConversationContext(
-                    session_key=message.session_key,
-                    tenant_id=self.tenant_id,
-                    conversation_history=history,
-                    user_state=get_state(message.session_key)
-                )
-                
-                # Verifica estratégias carregadas
-                for strategy in self.extensions.get("strategies", []):
-                    try:
-                        if strategy.should_activate(message, context):
-                            response = strategy.process_turn(message, context)
-                            if response:
-                                print(f"[AGENT] Estratégia {strategy.get_strategy_name()} processou a mensagem")
-                                return self._detect_and_format_structured_content(response, message.session_key)
-                    except Exception as e:
-                        print(f"[WARNING] Erro na estratégia {strategy.__class__.__name__}: {e}")
-                
-                # Verifica workflows carregados
-                for workflow in self.extensions.get("workflows", []):
-                    try:
-                        if workflow.should_activate(message, context):
-                            response = workflow.process_message(message, context)
-                            if response:
-                                print(f"[AGENT] Workflow {workflow.get_workflow_name()} processou a mensagem")
-                                return self._detect_and_format_structured_content(response, message.session_key)
-                    except Exception as e:
-                        print(f"[WARNING] Erro no workflow {workflow.__class__.__name__}: {e}")
-            
-            # SISTEMA LEGADO: Geração de resposta padrão via LLM
+            # Prompt para o usuário incluindo contexto completo
             user_prompt = f"""Baseado no histórico completo da conversa acima, responda à seguinte mensagem do usuário:
 
 NOVA MENSAGEM: {message.text}
@@ -586,10 +548,11 @@ Responda de forma natural, consistente com a conversa e demonstrando que você a
             response_text = chat_complete(
                 system_prompt=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
-                max_tokens=400,
+                max_tokens=400,  # Aumentado para permitir listas mais longas
                 temperature=0.7
             )
             
+            # 🔥 NOVA LÓGICA: Detecta e formata conteúdo estruturado automaticamente
             formatted_responses = self._detect_and_format_structured_content(
                 response_text.strip(), 
                 message.session_key
@@ -600,76 +563,36 @@ Responda de forma natural, consistente com a conversa e demonstrando que você a
         except Exception as e:
             print(f"[ERROR] Erro em _generate_contextual_response: {e}")
             return ["Desculpe, tive um problema técnico. Pode tentar novamente?"]
-    
-    def _build_system_prompt_with_full_context(self, conversation_context: str) -> str:
-        """Constrói prompt do sistema com contexto completo da conversa"""
-        knowledge_text = ""
-        if self.knowledge:
-            knowledge_text = json.dumps(self.knowledge, indent=2, ensure_ascii=False)
-        
-        base_prompt = f"""Você é um assistente virtual inteligente com acesso ao histórico completo da conversa.
-
-PERSONALIDADE:
-- Seja natural, cordial e consistente
-- NUNCA se reapresente se já fez isso antes na conversa
-- NUNCA repita saudações desnecessariamente
-- Use informações já compartilhadas pelo usuário
-- Demonstre que acompanha o fluxo da conversa
-- Seja conversacional e menos robótico
-
-INSTRUÇÕES CRÍTICAS:
-- SEMPRE consulte o histórico completo antes de responder
-- Se já se apresentou, não faça novamente
-- Se já sabe o nome do usuário, use-o naturalmente
-- Se já sabe informações sobre o usuário, referencie-as
-- Mantenha consistência com mensagens anteriores
-- Responda de forma clara e objetiva
-- Não invente informações não mencionadas
-
-CONTEXTO COMPLETO DA CONVERSA:
-{conversation_context}
-
-CONHECIMENTO DISPONÍVEL:
-{knowledge_text}
-
-REGRAS DE RESPOSTA:
-- Respostas entre 80-120 caracteres quando possível
-- Se não souber algo específico, seja honesto
-- Mantenha naturalidade e fluidez
-- JAMAIS ignore o contexto da conversa
-- Demonstre que você acompanha e lembra da conversa
-"""
-        
-        return base_prompt
 
 
 def handle_turn(tenant_id: str, message: Message) -> List[str]:
-    """
-    Processa turno com releitura completa da conversa + nova arquitetura
-    REFATORADO: Integra com nova arquitetura mantendo funcionalidade atual
-    """
+    """Processa turno com releitura completa da conversa + workflow customizado"""
     
-    print(f"\n[DEBUG] ===== INICIANDO handle_turn (REFATORADO) =====")
+    print(f"\n[DEBUG] ===== INICIANDO handle_turn =====")
     print(f"[DEBUG] tenant_id: {tenant_id}")
     print(f"[DEBUG] message.text: '{message.text}'")
-    print(f"[DEBUG] Nova arquitetura: {'DISPONÍVEL' if NEW_ARCHITECTURE_AVAILABLE else 'INDISPONÍVEL'}")
+    print(f"[DEBUG] message.session_key: {message.session_key}")
     
     try:
         agent = TimmyAgent(tenant_id)
+        
+        # Inicializa revisor de conversa com tenant_id
         conversation_reviewer = ConversationReviewer(message.session_key, tenant_id)
         
         # PASSO 1: Salva a mensagem do usuário PRIMEIRO
         print(f"[DEBUG] PASSO 1: Salvando mensagem do usuário...")
-        intent = "general"
+        intent = "general"  # Será determinado depois com contexto completo
         agent._save_message(message.session_key, "user", message.text, intent)
         
-        # PASSO 2: Recupera TODA a conversa
+        # PASSO 2: Recupera TODA a conversa (incluindo a mensagem que acabou de salvar)
         print(f"[DEBUG] PASSO 2: Recuperando conversa completa...")
         conversation_history = conversation_reviewer.get_full_conversation_history()
         
         # PASSO 3: Gera contexto completo para análise
         print(f"[DEBUG] PASSO 3: Gerando contexto completo...")
         conversation_context = conversation_reviewer.generate_conversation_context()
+        
+        print(f"[DEBUG] Contexto gerado para {len(conversation_history)} mensagens")
         
         # PASSO 4: Determina intent com contexto completo
         print(f"[DEBUG] PASSO 4: Determinando intent...")
@@ -685,14 +608,52 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
                 agent._save_message(message.session_key, "assistant", response, "greeting")
             return first_interaction
         
-        # PASSO 6: Coleta informações do usuário
+        # 🔥 PASSO 5.5: Verifica se há estratégia consultiva ANTES do workflow
+        print(f"[DEBUG] PASSO 5.5: Verificando estratégia consultiva...")
+        
+        try:
+            from core.conversation_strategy import process_consultative_turn
+            consultative_response = process_consultative_turn(tenant_id, message.text, message.session_key)
+            
+            if consultative_response:
+                print(f"[DEBUG] Estratégia consultiva ativa: '{consultative_response}'")
+                responses = micro_responses(consultative_response, min_chars=120, max_chars=200, session_key=message.session_key)
+                for response in responses:
+                    agent._save_message(message.session_key, "assistant", response, "consultative")
+                print(f"[DEBUG] ===== handle_turn CONCLUÍDO (CONSULTIVO) =====\n")
+                return responses
+        except Exception as e:
+            print(f"[DEBUG] Erro na estratégia consultiva: {e}")
+        
+        # 🔥 PASSO 5.6: Verifica se há workflow customizado
+        print(f"[DEBUG] PASSO 5.6: Verificando workflow customizado...")
+        workflow = load_tenant_workflow(tenant_id)
+        
+        if workflow and hasattr(workflow, 'process_message'):
+            print(f"[DEBUG] Workflow encontrado: {type(workflow).__name__}")
+            try:
+                workflow_response = workflow.process_message(message, conversation_context)
+                if workflow_response:
+                    print(f"[DEBUG] Workflow processou: '{workflow_response}'")
+                    responses = micro_responses(workflow_response, session_key=message.session_key)
+                    for response in responses:
+                        agent._save_message(message.session_key, "assistant", response, intent)
+                    print(f"[DEBUG] ===== handle_turn CONCLUÍDO (WORKFLOW) =====\n")
+                    return responses
+            except Exception as e:
+                print(f"[DEBUG] Erro no workflow: {e}")
+                import traceback
+                print(f"[DEBUG] Traceback do workflow: {traceback.format_exc()}")
+                # Continua com fluxo padrão
+                
+        # PASSO 6: Coleta informações do usuário (fluxo padrão)
         print(f"[DEBUG] PASSO 6: Coletando informações...")
         collected_info = agent._collect_user_info(message.text, message.session_key)
         
         if collected_info:
             print(f"[INFO] Coletado: {collected_info}")
-        
-        # PASSO 7: Gera resposta com contexto completo (usa nova arquitetura se disponível)
+            
+        # PASSO 7: Gera resposta com contexto completo (fluxo padrão)
         print(f"[DEBUG] PASSO 7: Gerando resposta contextual...")
         responses = agent._generate_contextual_response(message, conversation_context)
         print(f"[DEBUG] Respostas geradas: {responses}")
@@ -713,7 +674,7 @@ def handle_turn(tenant_id: str, message: Message) -> List[str]:
 
 
 def process_message(text: str, tenant_id: str = "default", phone_number: str = None, session_key: str = None) -> List[str]:
-    """Função de conveniência para processar mensagem (MANTIDA)"""
+    """Função de conveniência para processar mensagem"""
     
     try:
         if not session_key:
@@ -749,7 +710,7 @@ def process_message(text: str, tenant_id: str = "default", phone_number: str = N
 
 
 def get_user_history(phone_number: str, tenant_id: str = "default") -> Dict[str, Any]:
-    """Busca histórico de usuário no tenant específico (MANTIDA)"""
+    """Busca histórico de usuário no tenant específico"""
     try:
         user = persistence_manager.get_user_by_phone(phone_number, tenant_id)
         if not user:
@@ -776,46 +737,10 @@ def get_user_history(phone_number: str, tenant_id: str = "default") -> Dict[str,
 
 
 def get_data_stats(tenant_id: str = "default") -> Dict[str, Any]:
-    """Retorna estatísticas dos dados do tenant específico (MANTIDA)"""
+    """Retorna estatísticas dos dados do tenant específico"""
     return persistence_manager.get_tenant_stats(tenant_id)
 
 
 def get_all_tenants_stats() -> Dict[str, Any]:
-    """Retorna estatísticas de todos os tenants (MANTIDA)"""
+    """Retorna estatísticas de todos os tenants"""
     return persistence_manager.get_all_tenants_stats()
-
-
-def get_extension_info(tenant_id: str = "default") -> Dict[str, Any]:
-    """
-    NOVA FUNÇÃO: Retorna informações sobre extensões carregadas
-    """
-    if NEW_ARCHITECTURE_AVAILABLE:
-        try:
-            return extension_loader.get_loaded_extensions_info(tenant_id)
-        except Exception as e:
-            return {"error": f"Erro ao carregar informações de extensões: {e}"}
-    else:
-        return {"message": "Nova arquitetura não disponível"}
-
-
-def reload_tenant_extensions(tenant_id: str = "default") -> Dict[str, Any]:
-    """
-    NOVA FUNÇÃO: Recarrega extensões de um tenant específico
-    """
-    if NEW_ARCHITECTURE_AVAILABLE:
-        try:
-            extensions = extension_loader.reload_tenant_extensions(tenant_id)
-            return {
-                "status": "success",
-                "tenant_id": tenant_id,
-                "extensions_loaded": {
-                    "strategies": len(extensions.get("strategies", [])),
-                    "workflows": len(extensions.get("workflows", [])),
-                    "formatters": len(extensions.get("formatters", [])),
-                    "database": "loaded" if extensions.get("database") else "none"
-                }
-            }
-        except Exception as e:
-            return {"error": f"Erro ao recarregar extensões: {e}"}
-    else:
-        return {"message": "Nova arquitetura não disponível"}

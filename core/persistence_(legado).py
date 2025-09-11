@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Core Persistence - Sistema de persistência organizado por tenant
-ENHANCED: Adiciona interface opcional para nova arquitetura mantendo sistema atual
+Estrutura: data/{tenant}/{conversations|sessions|users}/
 """
 
 import csv
@@ -12,14 +12,6 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, asdict
 import uuid
-
-# Nova arquitetura (opcional)
-try:
-    from core.interfaces.database import TenantDatabase
-    NEW_INTERFACE_AVAILABLE = True
-except ImportError:
-    NEW_INTERFACE_AVAILABLE = False
-    TenantDatabase = object  # Fallback
 
 # Diretório base para dados
 DATA_DIR = Path("data")
@@ -113,37 +105,11 @@ class ConversationMessage:
 
 
 class EnhancedPersistenceManager:
-    """
-    Gerenciador de persistência organizado por tenant
-    ENHANCED: Mantém sistema CSV atual + suporte opcional para interface customizada
-    """
+    """Gerenciador de persistência organizado por tenant"""
     
     def __init__(self):
         # Garantir que o diretório base existe
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        
-        # Cache para implementações customizadas por tenant
-        self._custom_implementations: Dict[str, TenantDatabase] = {}
-    
-    def register_custom_persistence(self, tenant_id: str, implementation: TenantDatabase) -> None:
-        """
-        NOVA FUNCIONALIDADE: Registra implementação customizada para um tenant
-        
-        Args:
-            tenant_id: ID do tenant
-            implementation: Implementação customizada de TenantDatabase
-        """
-        if NEW_INTERFACE_AVAILABLE and isinstance(implementation, TenantDatabase):
-            self._custom_implementations[tenant_id] = implementation
-            print(f"[PERSISTENCE] Implementação customizada registrada para tenant: {tenant_id}")
-        else:
-            print(f"[WARNING] Interface TenantDatabase não disponível ou implementação inválida")
-    
-    def _get_implementation(self, tenant_id: str):
-        """
-        Retorna implementação adequada para o tenant (customizada ou padrão CSV)
-        """
-        return self._custom_implementations.get(tenant_id, None)
     
     def _get_users_file(self, tenant_id: str) -> Path:
         """Retorna caminho do arquivo de usuários do tenant"""
@@ -194,23 +160,9 @@ class EnhancedPersistenceManager:
                 writer.writeheader()
     
     def save_user_info(self, user_info: UserInfo) -> bool:
-        """
-        Salva informações do usuário
-        ENHANCED: Usa implementação customizada se disponível, senão CSV
-        """
+        """Salva informações do usuário no tenant específico"""
         try:
             tenant_id = user_info.tenant_id or "default"
-            
-            # Tenta usar implementação customizada primeiro
-            custom_impl = self._get_implementation(tenant_id)
-            if custom_impl:
-                try:
-                    user_data = asdict(user_info)
-                    return custom_impl.insert("users", user_data)
-                except Exception as e:
-                    print(f"[WARNING] Erro na implementação customizada, usando CSV: {e}")
-            
-            # Fallback para sistema CSV padrão
             users_file = self._get_users_file(tenant_id)
             self._init_users_csv(users_file)
             
@@ -231,23 +183,9 @@ class EnhancedPersistenceManager:
             return False
     
     def save_session_info(self, session_info: SessionInfo) -> bool:
-        """
-        Salva informações da sessão
-        ENHANCED: Usa implementação customizada se disponível, senão CSV
-        """
+        """Salva informações da sessão no tenant específico"""
         try:
             tenant_id = session_info.tenant_id
-            
-            # Tenta usar implementação customizada primeiro
-            custom_impl = self._get_implementation(tenant_id)
-            if custom_impl:
-                try:
-                    session_data = asdict(session_info)
-                    return custom_impl.insert("sessions", session_data)
-                except Exception as e:
-                    print(f"[WARNING] Erro na implementação customizada, usando CSV: {e}")
-            
-            # Fallback para sistema CSV padrão
             sessions_file = self._get_sessions_file(tenant_id)
             self._init_sessions_csv(sessions_file)
             
@@ -268,21 +206,8 @@ class EnhancedPersistenceManager:
             return False
     
     def save_message(self, message: ConversationMessage, tenant_id: str) -> bool:
-        """
-        Salva mensagem na conversa específica
-        ENHANCED: Usa implementação customizada se disponível, senão CSV por conversa
-        """
+        """Salva mensagem na conversa específica do tenant"""
         try:
-            # Tenta usar implementação customizada primeiro
-            custom_impl = self._get_implementation(tenant_id)
-            if custom_impl:
-                try:
-                    message_data = asdict(message)
-                    return custom_impl.insert("messages", message_data)
-                except Exception as e:
-                    print(f"[WARNING] Erro na implementação customizada, usando CSV: {e}")
-            
-            # Fallback para sistema CSV padrão (arquivo por conversa)
             conversation_file = self._get_conversation_file(tenant_id, message.session_id)
             self._init_conversation_csv(conversation_file)
             
@@ -300,25 +225,8 @@ class EnhancedPersistenceManager:
             return False
     
     def get_user_by_id(self, user_id: str, tenant_id: str = "default") -> Optional[UserInfo]:
-        """
-        Busca usuário por ID
-        ENHANCED: Usa implementação customizada se disponível, senão CSV
-        """
+        """Busca usuário por ID no tenant específico"""
         try:
-            # Tenta usar implementação customizada primeiro
-            custom_impl = self._get_implementation(tenant_id)
-            if custom_impl:
-                try:
-                    results = custom_impl.query(
-                        "SELECT * FROM users WHERE user_id = ?", 
-                        {"user_id": user_id}
-                    )
-                    if results:
-                        return UserInfo(**results[0])
-                except Exception as e:
-                    print(f"[WARNING] Erro na implementação customizada, usando CSV: {e}")
-            
-            # Fallback para sistema CSV padrão
             users_file = self._get_users_file(tenant_id)
             if not users_file.exists():
                 return None
@@ -333,25 +241,8 @@ class EnhancedPersistenceManager:
         return None
     
     def get_user_by_phone(self, phone: str, tenant_id: str = "default") -> Optional[UserInfo]:
-        """
-        Busca usuário por telefone
-        ENHANCED: Usa implementação customizada se disponível, senão CSV
-        """
+        """Busca usuário por telefone no tenant específico"""
         try:
-            # Tenta usar implementação customizada primeiro
-            custom_impl = self._get_implementation(tenant_id)
-            if custom_impl:
-                try:
-                    results = custom_impl.query(
-                        "SELECT * FROM users WHERE phone = ?", 
-                        {"phone": phone}
-                    )
-                    if results:
-                        return UserInfo(**results[0])
-                except Exception as e:
-                    print(f"[WARNING] Erro na implementação customizada, usando CSV: {e}")
-            
-            # Fallback para sistema CSV padrão
             users_file = self._get_users_file(tenant_id)
             if not users_file.exists():
                 return None
@@ -366,7 +257,7 @@ class EnhancedPersistenceManager:
         return None
     
     def get_session_by_id(self, session_id: str, tenant_id: str = "default") -> Optional[SessionInfo]:
-        """Busca sessão por ID (mantém implementação CSV original)"""
+        """Busca sessão por ID no tenant específico"""
         try:
             sessions_file = self._get_sessions_file(tenant_id)
             if not sessions_file.exists():
@@ -385,29 +276,9 @@ class EnhancedPersistenceManager:
         return None
     
     def get_session_messages(self, session_id: str, tenant_id: str = "default") -> List[ConversationMessage]:
-        """
-        Busca todas as mensagens de uma sessão específica
-        ENHANCED: Usa implementação customizada se disponível, senão CSV por conversa
-        """
+        """Busca todas as mensagens de uma sessão específica"""
         messages = []
         try:
-            # Tenta usar implementação customizada primeiro
-            custom_impl = self._get_implementation(tenant_id)
-            if custom_impl:
-                try:
-                    results = custom_impl.query(
-                        "SELECT * FROM messages WHERE session_id = ? ORDER BY timestamp", 
-                        {"session_id": session_id}
-                    )
-                    for row in results:
-                        if row.get('response_time_ms'):
-                            row['response_time_ms'] = int(row['response_time_ms'])
-                        messages.append(ConversationMessage(**row))
-                    return messages
-                except Exception as e:
-                    print(f"[WARNING] Erro na implementação customizada, usando CSV: {e}")
-            
-            # Fallback para sistema CSV padrão
             conversation_file = self._get_conversation_file(tenant_id, session_id)
             if not conversation_file.exists():
                 return messages
@@ -424,7 +295,7 @@ class EnhancedPersistenceManager:
         return messages
     
     def get_user_sessions(self, user_id: str, tenant_id: str = "default") -> List[SessionInfo]:
-        """Busca todas as sessões de um usuário (mantém implementação original)"""
+        """Busca todas as sessões de um usuário no tenant específico"""
         sessions = []
         try:
             sessions_file = self._get_sessions_file(tenant_id)
@@ -510,18 +381,9 @@ class EnhancedPersistenceManager:
             self.save_session_info(session)
     
     def get_tenant_stats(self, tenant_id: str = "default") -> Dict[str, Any]:
-        """
-        Retorna estatísticas de um tenant específico
-        ENHANCED: Inclui informações sobre implementação customizada
-        """
+        """Retorna estatísticas de um tenant específico"""
         try:
             structure = get_tenant_data_structure(tenant_id)
-            
-            # Verifica se há implementação customizada
-            has_custom_impl = tenant_id in self._custom_implementations
-            custom_impl_type = None
-            if has_custom_impl:
-                custom_impl_type = self._custom_implementations[tenant_id].__class__.__name__
             
             # Conta usuários
             user_count = 0
@@ -562,10 +424,7 @@ class EnhancedPersistenceManager:
                 "active_sessions": active_sessions,
                 "total_conversations": conversation_count,
                 "total_messages": total_messages,
-                "data_directory": str(structure["base"].absolute()),
-                "persistence_type": "custom" if has_custom_impl else "csv",
-                "custom_implementation": custom_impl_type,
-                "new_interface_available": NEW_INTERFACE_AVAILABLE
+                "data_directory": str(structure["base"].absolute())
             }
         
         except Exception as e:
@@ -573,10 +432,7 @@ class EnhancedPersistenceManager:
             return {"error": str(e)}
     
     def get_all_tenants_stats(self) -> Dict[str, Any]:
-        """
-        Retorna estatísticas de todos os tenants
-        ENHANCED: Inclui informações sobre nova arquitetura
-        """
+        """Retorna estatísticas de todos os tenants"""
         try:
             all_stats = {}
             
@@ -591,111 +447,19 @@ class EnhancedPersistenceManager:
             
             return {
                 "tenants": all_stats,
-                "total_tenants": len(all_stats),
-                "system_info": {
-                    "new_interface_available": NEW_INTERFACE_AVAILABLE,
-                    "custom_implementations": len(self._custom_implementations),
-                    "total_custom_tenants": len([t for t in all_stats.values() if t.get("persistence_type") == "custom"])
-                }
+                "total_tenants": len(all_stats)
             }
         
         except Exception as e:
             print(f"[ERROR] Erro ao obter estatísticas gerais: {e}")
             return {"error": str(e)}
-    
-    def migrate_tenant_to_custom(self, tenant_id: str, target_implementation: TenantDatabase) -> Dict[str, Any]:
-        """
-        NOVA FUNCIONALIDADE: Migra dados de um tenant do CSV para implementação customizada
-        
-        Args:
-            tenant_id: ID do tenant para migrar
-            target_implementation: Nova implementação de banco
-            
-        Returns:
-            Dict com resultado da migração
-        """
-        if not NEW_INTERFACE_AVAILABLE:
-            return {"error": "Interface TenantDatabase não disponível"}
-        
-        try:
-            migration_result = {
-                "tenant_id": tenant_id,
-                "users_migrated": 0,
-                "sessions_migrated": 0,
-                "messages_migrated": 0,
-                "errors": []
-            }
-            
-            # Conecta ao banco de destino
-            if not target_implementation.connect():
-                return {"error": "Falha ao conectar com implementação de destino"}
-            
-            # Cria tabelas se necessário
-            if not target_implementation.create_tables():
-                return {"error": "Falha ao criar tabelas na implementação de destino"}
-            
-            # Migra usuários
-            users_file = self._get_users_file(tenant_id)
-            if users_file.exists():
-                with open(users_file, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        try:
-                            if target_implementation.insert("users", row):
-                                migration_result["users_migrated"] += 1
-                        except Exception as e:
-                            migration_result["errors"].append(f"Erro ao migrar usuário {row.get('user_id', 'unknown')}: {e}")
-            
-            # Migra sessões
-            sessions_file = self._get_sessions_file(tenant_id)
-            if sessions_file.exists():
-                with open(sessions_file, 'r', encoding='utf-8') as f:
-                    reader = csv.DictReader(f)
-                    for row in reader:
-                        try:
-                            if target_implementation.insert("sessions", row):
-                                migration_result["sessions_migrated"] += 1
-                        except Exception as e:
-                            migration_result["errors"].append(f"Erro ao migrar sessão {row.get('session_id', 'unknown')}: {e}")
-            
-            # Migra mensagens de todas as conversas
-            conversations_dir = get_tenant_data_structure(tenant_id)["conversations"]
-            if conversations_dir.exists():
-                for conv_file in conversations_dir.glob("conversation_*.csv"):
-                    with open(conv_file, 'r', encoding='utf-8') as f:
-                        reader = csv.DictReader(f)
-                        for row in reader:
-                            try:
-                                if target_implementation.insert("messages", row):
-                                    migration_result["messages_migrated"] += 1
-                            except Exception as e:
-                                migration_result["errors"].append(f"Erro ao migrar mensagem {row.get('message_id', 'unknown')}: {e}")
-            
-            # Registra implementação customizada
-            self.register_custom_persistence(tenant_id, target_implementation)
-            
-            migration_result["status"] = "success"
-            migration_result["total_migrated"] = (
-                migration_result["users_migrated"] + 
-                migration_result["sessions_migrated"] + 
-                migration_result["messages_migrated"]
-            )
-            
-            print(f"[PERSISTENCE] Migração concluída para tenant {tenant_id}: {migration_result['total_migrated']} registros")
-            
-            return migration_result
-            
-        except Exception as e:
-            return {"error": f"Erro durante migração: {e}"}
-        finally:
-            target_implementation.disconnect()
 
 
 # Instância global do gerenciador aprimorado
 persistence_manager = EnhancedPersistenceManager()
 
 
-# Funções de conveniência atualizadas (MANTIDAS para compatibilidade)
+# Funções de conveniência atualizadas
 def save_user_info(user_info: UserInfo, tenant_id: str = "default") -> bool:
     """Função de conveniência para salvar usuário"""
     if not user_info.tenant_id:
@@ -730,53 +494,3 @@ def get_or_create_user_by_phone(phone: str, name: str = None, tenant_id: str = "
         )
         persistence_manager.save_user_info(user)
     return user
-
-
-# NOVAS FUNÇÕES para integração com nova arquitetura
-def register_tenant_database(tenant_id: str, implementation: TenantDatabase) -> bool:
-    """
-    NOVA FUNÇÃO: Registra implementação customizada de banco para um tenant
-    
-    Args:
-        tenant_id: ID do tenant
-        implementation: Implementação de TenantDatabase
-        
-    Returns:
-        bool: True se registrou com sucesso
-    """
-    try:
-        persistence_manager.register_custom_persistence(tenant_id, implementation)
-        return True
-    except Exception as e:
-        print(f"[ERROR] Erro ao registrar implementação customizada: {e}")
-        return False
-
-
-def migrate_tenant_persistence(tenant_id: str, target_implementation: TenantDatabase) -> Dict[str, Any]:
-    """
-    NOVA FUNÇÃO: Migra tenant do CSV para implementação customizada
-    
-    Args:
-        tenant_id: ID do tenant
-        target_implementation: Nova implementação
-        
-    Returns:
-        Dict: Resultado da migração
-    """
-    return persistence_manager.migrate_tenant_to_custom(tenant_id, target_implementation)
-
-
-def get_persistence_info(tenant_id: str = "default") -> Dict[str, Any]:
-    """
-    NOVA FUNÇÃO: Retorna informações sobre o sistema de persistência
-    
-    Args:
-        tenant_id: ID do tenant (opcional)
-        
-    Returns:
-        Dict: Informações sobre persistência
-    """
-    if tenant_id:
-        return persistence_manager.get_tenant_stats(tenant_id)
-    else:
-        return persistence_manager.get_all_tenants_stats()
