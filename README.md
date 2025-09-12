@@ -37,43 +37,22 @@ O Timmy-IA é uma plataforma robusta para criação de assistentes conversaciona
 ## 🏗️ **Arquitetura do Projeto**
 
 ```
-timmy_IA/
-├── 📱 app.py                    # Interface Streamlit principal
-├── ⚙️ .env                      # Configurações (copie de .env.example)
-├── 📦 requirements.txt          # Dependências Python
-│
-├── 🧠 core/                     # Motor principal
-│   ├── agent.py                # Sistema de releitura completa + AI
-│   ├── utils.py                # Micro-responses e utilitários
-│   ├── persistence.py          # Estrutura de dados por tenant
-│   ├── conversation_strategy.py # Estratégias consultivas
-│   ├── database/              # Sistema de banco por tenant
-│   │   ├── __init__.py        # Inicialização do módulo
-│   │   ├── connection.py      # Conexões SQLite por tenant
-│   │   └── models.py          # Modelos SQLAlchemy
-│   └── workflows/             # Workflows customizados
-│       └── medical_base.py    # Template médico com banco
-│
-├── 🗄️ data/                     # Dados organizados por tenant
-│   ├── default/                # Tenant padrão
-│   │   ├── conversations/      # Um CSV por conversa
-│   │   ├── sessions/          # Sessões do tenant
-│   │   └── users/             # Usuários do tenant
-│   └── varizemed/             # Exemplo: tenant clínica
-│
-├── 🏢 tenants/                  # Configurações por cliente
-│   ├── default/               # Configuração padrão
-│   │   ├── config.json        # Configurações gerais
-│   │   ├── knowledge.json     # Base de conhecimento
-│   │   └── examples.jsonl     # Exemplos de conversa
-│   └── timmy_vendas/          # Vendas do próprio Timmy
-│       ├── config.json        # Configurações comerciais
-│       ├── knowledge.json     # Planos e produtos
-│       └── examples.jsonl     # Estratégias de venda
-│
-└── 🔌 apps/                     # Interfaces (futuro)
-    ├── api.py                 # FastAPI completa
-    └── webhook.py             # Integrações WhatsApp/Telegram
+Timmy_IA/
+├── core/
+│   ├── agent.py
+│   ├── formatter.py
+│   ├── llm.py
+│   ├── persistence.py
+│   └── utils.py
+├── data/
+├── tenants/
+│   └── timmy_vendas/
+│       ├── config.json
+│       ├── examples.jsonl
+│       └── knowledge.json
+├── test/
+├── app.py
+└── requirements.txt
 ```
 
 ---

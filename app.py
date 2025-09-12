@@ -1,303 +1,214 @@
-# -*- coding: utf-8 -*-
+# app.py
 """
-Timmy-IA - Interface Streamlit
-ATUALIZADO: Compatível com nova arquitetura core/
+Timmy-IA - Interface Streamlit Simplificada
+Compatível com a nova arquitetura de 5 arquivos
 """
 
 import os
 import uuid
 import streamlit as st
-from pathlib import Path
+from datetime import datetime
 from dotenv import load_dotenv
 
-# Carrega variáveis de ambiente
+# Carrega variáveis de ambiente (.env)
 load_dotenv()
 
-# Imports da nova arquitetura
-try:
-    from core.agent import handle_turn, Message
-    from core.utils import get_state, clear_session, list_sessions
-    from core.persistence import persistence_manager
-except ImportError as e:
-    st.error(f"Erro ao importar módulos principais: {e}")
-    st.stop()
+# Core
+from core.agent import handle_turn, Message
+from core.utils import (
+    load_tenant_config,
+    list_tenants,
+    get_tenant_stats,
+    create_tenant_structure,
+)
 
-# =============================================================================
-# CONFIGURAÇÃO DA PÁGINA
-# =============================================================================
-
+# -----------------------------------------------------------------------------
+# CONFIG DA PÁGINA
+# -----------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Timmy-IA - Assistente Conversacional",
+    page_title="Timmy-IA - Assistente Multi-Tenant",
     page_icon="🤖",
-    layout="centered",
-    initial_sidebar_state="expanded"
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# =============================================================================
-# FUNÇÕES AUXILIARES
-# =============================================================================
-
-def list_available_tenants():
-    """Lista tenants disponíveis"""
-    tenants_dir = Path("tenants")
-    if not tenants_dir.exists():
-        return ["default"]
-    
-    tenants = []
-    for item in tenants_dir.iterdir():
-        if item.is_dir() and not item.name.startswith('.') and not item.name.startswith('__'):
-            tenants.append(item.name)
-    
-    return sorted(tenants) if tenants else ["default"]
-
-def get_tenant_info(tenant_id):
-    """Carrega informações básicas do tenant"""
-    try:
-        config_path = Path(f"tenants/{tenant_id}/config.json")
-        if config_path.exists():
-            import json
-            with open(config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                return {
-                    "name": config.get("agent_name", tenant_id.title()),
-                    "business": config.get("business_name", "Empresa"),
-                    "description": config.get("description", "Assistente conversacional")
-                }
-    except Exception as e:
-        print(f"Erro ao carregar config do tenant {tenant_id}: {e}")
-    
-    return {
-        "name": tenant_id.title(),
-        "business": "Empresa",
-        "description": "Assistente conversacional"
-    }
-
-def get_data_stats(tenant_id):
-    """Retorna estatísticas do tenant"""
-    try:
-        return persistence_manager.get_tenant_stats(tenant_id)
-    except Exception as e:
-        print(f"Erro ao obter stats do tenant {tenant_id}: {e}")
-        return {
-            "total_users": 0,
-            "total_sessions": 0,
-            "total_conversations": 0,
-            "total_messages": 0,
-            "active_sessions": 0
-        }
-
-def get_all_tenants_stats():
-    """Retorna estatísticas de todos os tenants"""
-    try:
-        return persistence_manager.get_all_tenants_stats()
-    except Exception as e:
-        print(f"Erro ao obter stats globais: {e}")
-        return {}
-
-# =============================================================================
-# SIDEBAR - CONFIGURAÇÕES
-# =============================================================================
-
-st.sidebar.header("⚙️ Configurações")
-
-# Seleção de tenant
-available_tenants = list_available_tenants()
-tenant_id = st.sidebar.selectbox(
-    "Selecionar Tenant:",
-    available_tenants,
-    help="Escolha qual versão do assistente usar"
+# CSS (opcional)
+st.markdown(
+    """
+<style>
+.stChat { background-color: #f5f5f5; border-radius: 10px; padding: 10px; }
+.user-message { background-color: #007AFF; color: white; padding: 10px; border-radius: 15px; margin: 5px 0; text-align: right; }
+.assistant-message { background-color: #E5E5EA; color: black; padding: 10px; border-radius: 15px; margin: 5px 0; }
+.stats-card { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin: 10px 0; }
+</style>
+""",
+    unsafe_allow_html=True,
 )
 
-# Informações do tenant selecionado
-tenant_info = get_tenant_info(tenant_id)
-st.sidebar.markdown(f"**🤖 {tenant_info['name']}**")
-st.sidebar.markdown(f"*{tenant_info['business']}*")
-st.sidebar.caption(tenant_info['description'])
-
-# Controles de sessão
-st.sidebar.markdown("---")
-st.sidebar.subheader("🔄 Controles")
-
-if st.sidebar.button("🗑️ Limpar Conversa", use_container_width=True):
-    session_key = st.session_state.get('session_key', '')
-    if session_key:
-        clear_session(session_key)
-        st.sidebar.success("Conversa limpa!")
-        st.rerun()
-
-# Estatísticas do tenant
-st.sidebar.markdown("---")
-st.sidebar.subheader("📊 Estatísticas")
-
-tenant_stats = get_data_stats(tenant_id)
-st.sidebar.metric("Conversas", tenant_stats.get("total_conversations", 0))
-st.sidebar.metric("Usuários", tenant_stats.get("total_users", 0))
-st.sidebar.metric("Mensagens", tenant_stats.get("total_messages", 0))
-
-# =============================================================================
-# INTERFACE PRINCIPAL
-# =============================================================================
-
-# Título dinâmico
-st.title(f"🤖 {tenant_info['name']}")
-st.caption(f"Assistente de {tenant_info['business']} | Tenant: `{tenant_id}`")
-
-# Inicializa session_state
-if 'session_key' not in st.session_state:
-    st.session_state.session_key = f"streamlit_{uuid.uuid4().hex[:12]}"
-
-if 'messages' not in st.session_state:
+# -----------------------------------------------------------------------------
+# ESTADO
+# -----------------------------------------------------------------------------
+if "session_key" not in st.session_state:
+    st.session_state.session_key = str(uuid.uuid4())
+if "messages" not in st.session_state:
     st.session_state.messages = []
+if "selected_tenant" not in st.session_state:
+    st.session_state.selected_tenant = "timmy_vendas"
+if "show_debug" not in st.session_state:
+    st.session_state.show_debug = False
 
-# Container para o chat
+# -----------------------------------------------------------------------------
+# SIDEBAR
+# -----------------------------------------------------------------------------
+with st.sidebar:
+    st.header("⚙️ Configurações")
+
+    # Tenants
+    st.subheader("🏢 Tenant")
+    available_tenants = list_tenants()
+    if not available_tenants:
+        st.warning("Nenhum tenant encontrado!")
+        if st.button("➕ Criar Tenant Padrão"):
+            create_tenant_structure("timmy_vendas")
+            st.rerun()
+    else:
+        selected_tenant = st.selectbox(
+            "Selecione o Tenant:",
+            available_tenants,
+            index=available_tenants.index(st.session_state.selected_tenant)
+            if st.session_state.selected_tenant in available_tenants
+            else 0,
+            key="tenant_selector",
+        )
+
+        if selected_tenant != st.session_state.selected_tenant:
+            st.session_state.selected_tenant = selected_tenant
+            st.session_state.messages = []
+            st.session_state.session_key = str(uuid.uuid4())
+            st.rerun()
+
+    # Info do tenant
+    if st.session_state.selected_tenant:
+        cfg = load_tenant_config(st.session_state.selected_tenant)
+        st.info(
+            f"**Agente:** {cfg.get('agent_name','Timmy')}  \n"
+            f"**Empresa:** {cfg.get('business_name','N/A')}  \n"
+            f"**Sessão:** {st.session_state.session_key[:8]}..."
+        )
+
+    st.divider()
+
+    # Controles
+    st.subheader("💬 Conversa")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔄 Nova Conversa", use_container_width=True):
+            st.session_state.messages = []
+            st.session_state.session_key = str(uuid.uuid4())
+            st.rerun()
+    with col2:
+        if st.button("🗑️ Limpar Tudo", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+
+    st.session_state.show_debug = st.checkbox("🛠 Modo Debug", value=st.session_state.show_debug)
+
+    st.divider()
+
+    # Estatísticas
+    st.subheader("📊 Estatísticas")
+    if st.session_state.selected_tenant:
+        stats = get_tenant_stats(st.session_state.selected_tenant)
+        if stats["exists"]:
+            st.metric("Total Conversas", stats["total_conversations"])
+            st.metric("Total Mensagens", stats["total_messages"])
+            st.metric("Sessões Ativas", stats["total_sessions"])
+        else:
+            st.info("Ainda sem dados para este tenant")
+
+    # Criar novo tenant
+    st.divider()
+    st.subheader("➕ Novo Tenant")
+    with st.expander("Criar Novo Tenant"):
+        new_tenant_id = st.text_input("ID do Tenant:", placeholder="ex: minha_empresa", key="new_tenant_id")
+        if st.button("Criar Tenant", disabled=not new_tenant_id):
+            if new_tenant_id and new_tenant_id not in available_tenants:
+                if create_tenant_structure(new_tenant_id):
+                    st.success(f"Tenant '{new_tenant_id}' criado!")
+                    st.session_state.selected_tenant = new_tenant_id
+                    st.rerun()
+                else:
+                    st.error("Erro ao criar tenant")
+            else:
+                st.error("ID inválido ou já existe")
+
+# -----------------------------------------------------------------------------
+# ÁREA PRINCIPAL
+# -----------------------------------------------------------------------------
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    st.title("🤖 Timmy-IA")
+    if st.session_state.selected_tenant:
+        cfg = load_tenant_config(st.session_state.selected_tenant)
+        st.caption(f"Conversando com **{cfg.get('agent_name','Timmy')}** — {cfg.get('business_name','')}")
+
 chat_container = st.container()
 
-# Área de entrada de mensagem
-with st.form("message_form", clear_on_submit=True):
-    col1, col2 = st.columns([4, 1])
-    
-    with col1:
-        user_input = st.text_input(
-            "Digite sua mensagem:",
-            placeholder=f"Converse com {tenant_info['name']}...",
-            label_visibility="collapsed"
-        )
-    
-    with col2:
-        submit_button = st.form_submit_button("▶️ Enviar", use_container_width=True)
-
-# Processamento da mensagem
-if submit_button and user_input.strip():
-    # Adiciona mensagem do usuário
-    st.session_state.messages.append({
-        "role": "user", 
-        "content": user_input,
-        "timestamp": "agora"
-    })
-    
-    with st.spinner(f"{tenant_info['name']} está pensando..."):
-        try:
-            # Cria objeto Message
-            message_obj = Message(
-                text=user_input,
-                session_key=st.session_state.session_key,
-                tenant_id=tenant_id
-            )
-            
-            # Chama handle_turn com a nova assinatura
-            result = handle_turn(message_obj)
-            
-            # Processa resposta baseado no tipo
-            if isinstance(result, dict):
-                # Nova arquitetura retorna dict
-                response_text = result.get('response', 'Desculpe, não consegui processar sua mensagem.')
-                status = result.get('status', 'unknown')
-                method = result.get('method', 'unknown')
-                
-                # Log para debug
-                st.sidebar.caption(f"Status: {status} | Método: {method}")
-                
-            elif isinstance(result, list):
-                # Sistema legado retorna lista
-                response_text = ' '.join(result) if result else 'Desculpe, não consegui processar sua mensagem.'
-                
-            else:
-                # Fallback
-                response_text = str(result) if result else 'Desculpe, não consegui processar sua mensagem.'
-            
-            # Adiciona resposta do assistente
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": response_text,
-                "timestamp": "agora"
-            })
-            
-        except Exception as e:
-            st.error(f"Erro ao processar mensagem: {e}")
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": f"Desculpe, ocorreu um erro: {str(e)}",
-                "timestamp": "agora"
-            })
-
-# Display do chat
+# Histórico
 with chat_container:
-    if not st.session_state.messages:
-        st.info(f"👋 Olá! Sou o {tenant_info['name']}. Como posso ajudar você hoje?")
-    else:
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.write(message["content"])
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.write(m["content"])
+            if st.session_state.show_debug and "metadata" in m:
+                with st.expander("🔍 Debug Info"):
+                    st.json(m["metadata"])
 
-# =============================================================================
-# SIDEBAR EXPANDIDO - DEBUG E ADMIN
-# =============================================================================
+# Entrada do usuário
+if prompt := st.chat_input("Digite sua mensagem..."):
+    st.session_state.messages.append({"role": "user", "content": prompt, "timestamp": datetime.now().isoformat()})
+    with st.chat_message("user"):
+        st.write(prompt)
 
-with st.sidebar.expander("🔧 Debug & Admin", expanded=False):
-    st.subheader("🔍 Informações Técnicas")
-    
-    # Informações da sessão
-    st.write("**Sessão Atual:**")
-    st.code(st.session_state.session_key)
-    
-    # Estado da sessão
-    session_data = get_state(st.session_state.session_key)
-    if session_data:
-        st.write("**Estado da Sessão:**")
-        st.json(session_data, expanded=False)
-    
-    # Configurações de ambiente
-    st.write("**Variáveis de Ambiente:**")
-    env_vars = {
-        "OPENAI_API_KEY": "✅ Configurada" if os.getenv("OPENAI_API_KEY") else "❌ Não configurada",
-        "TIMMY_MODEL": os.getenv("TIMMY_MODEL", "Não definido"),
-        "DEBUG": os.getenv("DEBUG", "false")
-    }
-    st.json(env_vars)
-    
-    # Sessões ativas
-    st.write("**Sessões Ativas:**")
-    active_sessions = list_sessions()
-    if active_sessions:
-        for session in active_sessions[:5]:  # Mostra apenas primeiras 5
-            st.caption(f"🔑 {session}")
-    else:
-        st.caption("Nenhuma sessão ativa")
-    
-    # Estatísticas globais
-    if st.button("📊 Ver Stats Globais"):
-        global_stats = get_all_tenants_stats()
-        st.json(global_stats, expanded=False)
+    # Resposta do agente
+    with st.chat_message("assistant"):
+        with st.spinner("Pensando..."):
+            try:
+                message = Message(
+                    text=prompt,
+                    session_key=st.session_state.session_key,
+                    metadata={"tenant": st.session_state.selected_tenant, "timestamp": datetime.now().isoformat()},
+                )
 
-# =============================================================================
-# FOOTER
-# =============================================================================
+                # ✅ CORRIGIDO: handle_turn agora retorna List[str] diretamente
+                response_pieces = handle_turn(tenant_id=st.session_state.selected_tenant, message=message)
 
-st.markdown("---")
+                # Exibe cada chunk como uma mensagem separada
+                import time
+                for i, resp in enumerate(response_pieces):
+                    st.write(resp)
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": resp,
+                            "timestamp": datetime.now().isoformat(),
+                            "metadata": {"chunk_index": i, "total_chunks": len(response_pieces)},
+                        }
+                    )
+                    time.sleep(0.05)  # Pequena pausa para efeito visual
 
-# Métricas principais
-col1, col2, col3, col4 = st.columns(4)
-
-with col1:
-    st.metric("Sessões Ativas", len(list_sessions()))
-
-with col2:
-    api_status = "✅ Conectado" if os.getenv("OPENAI_API_KEY") else "❌ Sem API Key"
-    st.metric("OpenAI API", api_status)
-
-with col3:
-    st.metric("Tenants", len(available_tenants))
-
-with col4:
-    st.metric("Mensagens", len(st.session_state.messages))
-
-# Informações da versão
-st.markdown(
-    f"""
-    <div style='text-align: center; color: #666; font-size: 0.8em; margin-top: 1rem;'>
-        🤖 <strong>Timmy-IA v3.0</strong> | Nova Arquitetura Core<br>
-        <em>Tenant: {tenant_id} | Sessão: {st.session_state.session_key[:8]}...</em>
-    </div>
-    """, 
-    unsafe_allow_html=True
-)
+            except Exception as e:
+                error_msg = f"⚠️ Erro: {str(e)}"
+                st.error(error_msg)
+                st.session_state.messages.append(
+                    {
+                        "role": "assistant",
+                        "content": "Ops! Algo deu errado. Tenta de novo?",
+                        "timestamp": datetime.now().isoformat(),
+                        "metadata": {"error": True, "error_detail": str(e)},
+                    }
+                )
+                
+                # ✅ NOVO: Modo debug mostra erro completo
+                if st.session_state.show_debug:
+                    import traceback
+                    st.code(traceback.format_exc(), language="python")

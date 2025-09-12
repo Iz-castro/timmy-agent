@@ -1,118 +1,148 @@
 {
   "business_info": {
-    "name": "Timmy - Atendente Virtual",
-    "description": "Atendimento inteligente, curto e direto, feito para pequenos e médios negócios",
-    "value_proposition": "Automatize WhatsApp e Web com IA, regras de negócio, handoff humano e relatórios simples",
-    "target_audience": "PMEs (pequenas e médias empresas)",
+    "name": "Timmy IA",
+    "description": "Plataforma de agentes de IA para atendimento ao cliente",
+    "value_proposition": "Automatize 80% do atendimento e reduza custos em até 60%",
     "differentials": [
-      "Substitui parte do atendimento humano",
-      "Previsibilidade de custos",
-      "Foco em conversão",
-      "Respostas curtas e objetivas (sem emojis)"
+      "Configuração em 15 minutos",
+      "Sem necessidade de código",
+      "Integração nativa com WhatsApp",
+      "IA treinada para seu negócio"
     ]
   },
   
   "plans": {
     "essencial": {
+      "name": "Essencial",
       "price": "R$ 750/mês",
-      "conversations": "Até 300 conversas inclusas",
+      "conversations": "300 conversas inclusas",
+      "excess_price": "R$ 0,20 por conversa excedente",
       "features": [
-        "WhatsApp ou Web",
-        "Chat/CRM próprio", 
-        "Handoff humano",
-        "Excedente: R$ 0,20/conversa"
+        "WhatsApp ou Web Chat",
+        "CRM próprio",
+        "Handoff para humano",
+        "Relatórios básicos"
       ],
-      "ideal_for": "Início rápido em clínicas e comércios locais"
+      "ideal_for": "Clínicas e comércios locais iniciando com IA"
     },
     "profissional": {
-      "price": "R$ 1.400/mês",
-      "conversations": "Até 1.000 conversas inclusas",
+      "name": "Profissional",
+      "price": "R$ 1400/mês",
+      "conversations": "1000 conversas inclusas",
+      "excess_price": "R$ 0,20 por conversa excedente",
       "features": [
-        "Relatórios mensais",
-        "Regras personalizadas", 
+        "Tudo do Essencial",
+        "Relatórios mensais detalhados",
+        "Regras personalizadas",
         "Integrações básicas",
-        "Excedente: R$ 0,20/conversa"
+        "Suporte prioritário"
       ],
       "ideal_for": "PMEs em crescimento com mais volume",
       "recommended": true
     },
     "premium": {
-      "price": "R$ 2.000/mês",
+      "name": "Premium",
+      "price": "R$ 2000/mês",
       "conversations": "Conversas ilimitadas",
       "features": [
-        "Multiagente (WhatsApp + Web/Instagram)",
+        "Multiagente (WhatsApp + Web + Instagram)",
         "Dashboards de qualidade",
-        "Suporte prioritário"
+        "API completa",
+        "Treinamento personalizado",
+        "Suporte prioritário 24/7"
       ],
-      "ideal_for": "Previsibilidade total"
+      "ideal_for": "Empresas que precisam de previsibilidade total"
     },
     "enterprise": {
-      "price": "R$ 3.500+/mês",
-      "conversations": "Ilimitadas",
+      "name": "Enterprise",
+      "price": "R$ 3500+/mês",
+      "conversations": "Conversas ilimitadas",
       "features": [
-        "Inclui tudo do Premium",
-        "Persona sob medida",
-        "Integração com ERP/agenda",
-        "Relatórios de ciência de dados", 
-        "Consultoria mensal"
+        "Tudo do Premium",
+        "Persona 100% customizada",
+        "Integração com ERP/CRM/Agenda",
+        "Relatórios de ciência de dados",
+        "Consultoria mensal incluída",
+        "SLA garantido"
       ],
-      "ideal_for": "Integrações profundas e dados avançados"
+      "ideal_for": "Grandes empresas com necessidades específicas"
     }
   },
   
-  "features": {
-    "ia_conhecimento": "Respostas curtas, contexto do cliente e políticas sob medida",
-    "handoff_confiavel": "Coleta nome, plano e especialidade antes de transferir",
-    "relatorios": "Volume, horários de pico e taxa de handoff",
-    "whatsapp_integration": "Integração WhatsApp Cloud API da Meta",
-    "no_emojis": "Padrão profissional sem emojis",
-    "multi_tenant": "Suporte a múltiplos clientes isolados"
+  "policies": {
+    "payment": {
+      "methods": ["Consulte nosso comercial para opções de pagamento disponíveis"],
+      "billing_cycle": "Mensal",
+      "currency": "BRL",
+      "invoice_info": "Entre em contato para detalhes sobre faturamento",
+      "discounts": "Consulte condições especiais para contratos anuais"
+    },
+    "cancellation": {
+      "contract_type": "Sem fidelidade",
+      "notice_period": "Cancele quando quiser",
+      "penalties": "Sem multas",
+      "process": "Entre em contato com nosso suporte"
+    },
+    "implementation": {
+      "setup_time": "Em média 15 minutos",
+      "support_included": true,
+      "training_included": "Suporte na configuração e templates prontos",
+      "onboarding_process": "Configuração guiada com nossa equipe"
+    },
+    "support": {
+      "channels": ["Chat", "Email", "WhatsApp"],
+      "business_hours": "Segunda a sexta, 9h às 18h",
+      "emergency_support": "Planos Premium e Enterprise têm suporte prioritário",
+      "response_time": "Até 24h para planos básicos, até 4h para prioritário"
+    },
+    "data_security": {
+      "gdpr_compliant": true,
+      "data_storage": "Dados armazenados com segurança no Brasil",
+      "backup_policy": "Backups automáticos diários",
+      "privacy_policy": "Disponível em nosso site"
+    },
+    "integration": {
+      "whatsapp_setup": "Integração nativa - configuração em minutos",
+      "api_access": "API completa disponível nos planos Premium e Enterprise",
+      "third_party": "Integrações básicas no Profissional, completas no Premium+",
+      "custom_integrations": "Disponível no plano Enterprise"
+    }
   },
   
-  "integrations": {
-    "whatsapp": "Meta WhatsApp Cloud API (direto da Meta)",
-    "doctoralia": "Fluxo de link direto e integrações avançadas",
-    "agenda": "Integração com sistemas de agendamento",
-    "erp": "Disponível nos planos superiores",
-    "crm": "CRM próprio incluído"
-  },
+  "discovery_questions": [
+    "Que tipo de negócio você tem?",
+    "Quantas conversas/atendimentos vocês têm por mês?",
+    "Quanto tempo sua equipe gasta com perguntas repetitivas?",
+    "Vocês já usam alguma ferramenta de automação?",
+    "Qual é o principal canal de atendimento hoje?"
+  ],
   
-  "contact": {
-    "sales_approach": "Solicitar proposta personalizada",
-    "demo_available": true,
-    "implementation_time": "Setup rápido",
-    "support": "Suporte técnico incluído"
+  "objection_handlers": {
+    "too_expensive": "Entendo sua preocupação com o investimento. Vamos calcular: se você economizar 2h por dia da sua equipe, isso já representa mais de R$ 2.000/mês em produtividade. O Timmy se paga e ainda gera lucro!",
+    "already_have_solution": "Que ótimo que já usa automação! O Timmy se diferencia pela facilidade de configuração e pela qualidade das respostas. Posso te mostrar uma demonstração rápida?",
+    "dont_need": "Compreendo! Muitos clientes pensavam assim antes de ver o impacto. Que tal me contar um pouco sobre como funciona seu atendimento hoje?"
   },
   
   "faq": [
     {
       "question": "Como funciona a cobrança?",
-      "answer": "Preços mensais fixos com conversas inclusas. Excedente cobrado por conversa nos planos Essencial e Profissional."
+      "answer": "Cobrança mensal. Para detalhes sobre formas de pagamento, entre em contato com nosso comercial."
     },
     {
-      "question": "Posso integrar com WhatsApp?",
-      "answer": "Sim, operamos direto na Meta Cloud API. Custos variáveis podem ser repassados conforme plano."
+      "question": "Posso cancelar a qualquer momento?",
+      "answer": "Sim! Sem fidelidade. Cancele quando quiser, sem multas."
     },
     {
-      "question": "O Timmy substitui atendentes?",
-      "answer": "Reduz carga e qualifica conversas. Handoff é parte do fluxo para casos complexos."
+      "question": "Quanto tempo leva para configurar?",
+      "answer": "Em média 15 minutos! Fornecemos templates prontos e suporte na configuração."
     },
     {
-      "question": "Como são os relatórios?",
-      "answer": "Volume, horários de pico, taxa de handoff. Dashboards no Premium e customizados no Enterprise."
+      "question": "Quais formas de pagamento aceitam?",
+      "answer": "Entre em contato com nosso comercial para conhecer as opções de pagamento disponíveis para sua empresa."
     },
     {
-      "question": "Posso personalizar as respostas?",
-      "answer": "Sim, cada cliente tem suas próprias regras, conhecimento e personalidade configuráveis."
+      "question": "Tem suporte técnico?",
+      "answer": "Sim! Oferecemos suporte via chat, email e WhatsApp. Planos Premium e Enterprise têm suporte prioritário."
     }
-  ],
-  
-  "competitive_advantages": [
-    "Foco em PMEs (não enterprise)",
-    "Preços transparentes e previsíveis", 
-    "Setup rápido comparado a soluções complexas",
-    "Handoff inteligente (não apenas chatbot)",
-    "Respostas profissionais (sem emojis)",
-    "Multi-tenant nativo"
   ]
 }

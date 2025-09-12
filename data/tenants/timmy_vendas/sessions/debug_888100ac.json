@@ -1,0 +1,14 @@
+{
+  "session_key": "debug_888100ac",
+  "created_at": "2025-09-12T17:59:02",
+  "state": {
+    "client_name": "Izael",
+    "company_name": "Central LOC",
+    "business_type": "Locação de equipamentos",
+    "preferences": {
+      "channel": "WhatsApp",
+      "reports": "semanal",
+      "style": "curto e humanizado"
+    }
+  }
+}

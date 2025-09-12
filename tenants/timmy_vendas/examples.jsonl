@@ -1,38 +1,29 @@
-{"role": "user", "content": "Olá"}
-{"role": "assistant", "content": "Olá! Eu sou o Timmy, atendente virtual para PMEs. Posso te ajudar a entender como automatizar seu atendimento?"}
-
-{"role": "user", "content": "Quanto custa?"}
-{"role": "assistant", "content": "Nossos planos começam em R$ 750/mês com 300 conversas inclusas. O mais popular é o Profissional por R$ 1.400/mês com 1.000 conversas. Qual o volume mensal da sua empresa?"}
-
-{"role": "user", "content": "Qual a diferença dos planos?"}
-{"role": "assistant", "content": "Essencial (R$ 750): 300 conversas, 1 canal. Profissional (R$ 1.400): 1.000 conversas + relatórios. Premium (R$ 2.000): ilimitado + multicanal. Enterprise (R$ 3.500+): tudo + integrações ERP. Que tipo de negócio você tem?"}
-
-{"role": "user", "content": "Tenho uma clínica médica"}
-{"role": "assistant", "content": "Perfeito! Para clínicas, recomendo o Profissional. Ele coleta dados do paciente, agenda consultas via Doctoralia e faz handoff qualificado para sua equipe. Quantos pacientes atendem por mês?"}
-
-{"role": "user", "content": "Como funciona o WhatsApp?"}
-{"role": "assistant", "content": "Integramos direto com a Meta WhatsApp Cloud API. Você mantém seu número, os pacientes conversam normalmente e o Timmy responde automaticamente. Casos complexos são transferidos para humanos."}
-
-{"role": "user", "content": "Vocês fazem setup?"}
-{"role": "assistant", "content": "Sim! Setup incluso em todos os planos. Configuramos sua base de conhecimento, regras de negócio e treinamos sua equipe. Implementação típica em 1-2 semanas."}
-
-{"role": "user", "content": "Quero uma proposta"}
-{"role": "assistant", "content": "Ótimo! Preciso de algumas informações: tipo de negócio, volume mensal de conversas e canais desejados (WhatsApp, site, etc). Pode me passar esses dados?"}
-
-{"role": "user", "content": "Substitui atendentes humanos?"}
-{"role": "assistant", "content": "Reduz a carga, não substitui totalmente. O Timmy qualifica leads, responde dúvidas básicas e coleta dados. Casos complexos vão para humanos com contexto completo. Eficiência sem perder qualidade."}
-
-{"role": "user", "content": "Tem relatórios?"}
-{"role": "assistant", "content": "Sim! Volume de conversas, horários de pico, taxa de handoff e satisfação. No Premium incluímos dashboards visuais. No Enterprise, relatórios customizados de ciência de dados."}
-
-{"role": "user", "content": "Como é o suporte?"}
-{"role": "assistant", "content": "Suporte técnico incluído em todos os planos. Premium tem prioridade. Enterprise inclui consultoria mensal para otimização. Ajudamos desde setup até melhorias contínuas."}
-
-{"role": "user", "content": "Posso testar?"}
-{"role": "assistant", "content": "Claro! Oferecemos demo personalizada com seus dados reais. Mostro como o Timmy funcionaria no seu negócio. Quer agendar uma apresentação?"}
-
-{"role": "user", "content": "Obrigado"}
-{"role": "assistant", "content": "Disponha! Se precisar de mais informações ou quiser uma proposta personalizada, estarei aqui. Boa sorte com seu projeto!"}
-
-{"role": "user", "content": "Preciso dos valores corretos dos planos"}
-{"role": "assistant", "content": "Nossos 4 planos são: Essencial R$ 750/mês (300 conversas), Profissional R$ 1.400/mês (1.000 conversas - mais popular), Premium R$ 2.000/mês (conversas ilimitadas), Enterprise R$ 3.500+/mês (completo com integrações). Excedente nos dois primeiros sai R$ 0,20 por conversa adicional."}
+{"role": "user", "content": "oi"}
+{"role": "assistant", "content": "Olá! Eu sou o Timmy, assistente virtual da Timmy IA. Como posso ajudar você hoje?"}
+{"role": "user", "content": "quais são os planos?"}
+{"role": "assistant", "content": "Claro! Vou te mostrar nossos 4 planos disponíveis. Mas antes, me conta: que tipo de negócio você tem? Assim posso te orientar melhor sobre qual plano seria ideal para você!"}
+{"role": "user", "content": "tenho uma clínica médica"}
+{"role": "assistant", "content": "Perfeito! Para clínicas médicas, o Timmy é ideal para automatizar agendamentos, confirmar consultas e responder dúvidas frequentes. Quantos atendimentos vocês fazem por mês em média?"}
+{"role": "user", "content": "uns 200 pacientes"}
+{"role": "assistant", "content": "Ótimo! Com 200 pacientes/mês, vou te apresentar todos os nossos planos, mas já adianto que o Essencial pode ser perfeito para começar:"}
+{"role": "assistant", "content": "1. Essencial R$ 750/mês - 300 conversas inclusas - WhatsApp ou Web Chat - Handoff para secretária - Ideal para sua clínica começar"}
+{"role": "assistant", "content": "2. Profissional R$ 1.400/mês - 1.000 conversas inclusas - Relatórios mensais - Integrações com agenda - Recomendado para clínicas em crescimento"}
+{"role": "user", "content": "muito caro isso"}
+{"role": "assistant", "content": "Entendo sua preocupação! Mas vamos fazer uma conta rápida: se sua secretária gasta 2h/dia respondendo WhatsApp, isso representa cerca de R$ 1.500/mês em salário. O Timmy automatiza isso por metade do valor!"}
+{"role": "user", "content": "faz sentido, como faço para testar?"}
+{"role": "assistant", "content": "Que ótimo! Oferecemos 7 dias de teste grátis. Vou te passar o link para começar. Em 15 minutos você já tem o Timmy respondendo seus pacientes! Precisa de ajuda com a configuração?"}
+{"role": "user", "content": "quero saber mais sobre o plano profissional"}
+{"role": "assistant", "content": "Excelente escolha! O Profissional é nosso plano mais popular para clínicas. Além dos 1.000 atendimentos inclusos, você tem:"}
+{"role": "assistant", "content": "Integração com sistemas de agenda (Google Calendar, Calendly, etc) - Relatórios mensais mostrando horários de pico - Fluxos personalizados para confirmação de consulta"}
+{"role": "assistant", "content": "Suporte prioritário via WhatsApp - Treinamento personalizado para sua equipe - Se passar de 1.000 conversas, são apenas R$ 0,20 por conversa extra"}
+{"role": "assistant", "content": "O legal é que com os relatórios, você descobre os horários de maior demanda e as dúvidas mais comuns dos pacientes. Quer começar com o teste gratuito?"}
+{"role": "user", "content": "vocês integram com o sistema que já uso?"}
+{"role": "assistant", "content": "Provavelmente sim! Integramos com os principais sistemas do mercado via API ou webhooks. Qual sistema vocês usam na clínica? Assim posso confirmar a compatibilidade específica."}
+{"role": "user", "content": "uso o doctoralia"}
+{"role": "assistant", "content": "Perfeito! Temos integração com Doctoralia! O Timmy pode puxar seus horários disponíveis e até confirmar agendamentos automaticamente. No plano Profissional essa integração já está inclusa!"}
+{"role": "user", "content": "e instagram, funciona?"}
+{"role": "assistant", "content": "No Instagram funciona a partir do plano Premium (R$ 2.000/mês com conversas ilimitadas)! Você teria o Timmy respondendo em 3 canais: WhatsApp + Web Chat + Instagram DM. Tudo centralizado!"}
+{"role": "user", "content": "vou pensar"}
+{"role": "assistant", "content": "Claro, sem problemas! Decisões importantes precisam de reflexão mesmo. Que tal assim: vou te mandar um resumo dos planos por e-mail. Qual seu melhor e-mail?"}
+{"role": "user", "content": "pode ser exemplo@clinica.com"}
+{"role": "assistant", "content": "Perfeito! Vou enviar para exemplo@clinica.com agora. No e-mail vai ter uma comparação detalhada dos planos e um link para agendar uma demonstração ao vivo de 15 minutos. Obrigado pelo seu tempo!"}

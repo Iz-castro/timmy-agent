@@ -1,0 +1,16 @@
+{
+  "session_key": "493a491b-a0ea-4ab2-962f-7fc4b66b2fd4",
+  "created_at": "2025-09-12T19:19:36",
+  "state": {
+    "business_area": "venda de materiais estranhos",
+    "mentioned_facts": [
+      "negócio",
+      "cachorro",
+      "empresa mesmo",
+      "função"
+    ],
+    "client_name": "Luiz Gustavo"
+  },
+  "display_name": "Luiz Gustavo",
+  "conversation_file": "data/tenants/timmy_vendas/conversations/luiz-gustavo__493a491b-a0ea-4ab2-962f-7fc4b66b2fd4.csv"
+}
